@@ -39,6 +39,8 @@ pub(crate) struct Claim {
     pub(crate) file: String,
     pub(crate) function: String,
     pub(crate) paths: Paths,
+    /// Paths that exist in C but have no effect the model can observe.
+    pub(crate) unobservable: BTreeSet<usize>,
     pub(crate) hash: String,
     pub(crate) declaration: String,
     /// `file:line` of the claim, for error messages.
@@ -91,12 +93,13 @@ fn scan_file(name: &str, text: &str, scan: &mut Scan) {
             .find(|next| !is_skippable(next))
             .and_then(|next| declaration_name(next));
         match (parse_claim(body), declaration) {
-            (Ok((file, function, paths, hash)), Some(declaration)) => {
+            (Ok(fields), Some(declaration)) => {
                 scan.claims.push(Claim {
-                    file,
-                    function,
-                    paths,
-                    hash,
+                    file: fields.file,
+                    function: fields.function,
+                    paths: fields.paths,
+                    unobservable: fields.unobservable,
+                    hash: fields.hash,
                     declaration,
                     origin,
                 });
@@ -132,30 +135,50 @@ fn declaration_name(line: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn parse_claim(body: &str) -> Result<(String, String, Paths, String), String> {
+/// The fields of a claim after the `-- mpv-cover:` marker.
+#[derive(Debug)]
+struct Fields {
+    file: String,
+    function: String,
+    paths: Paths,
+    unobservable: BTreeSet<usize>,
+    hash: String,
+}
+
+fn parse_ids(word: &str, ids: &str) -> Result<BTreeSet<usize>, String> {
+    ids.split(',')
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .map_err(|_| format!("bad path list `{word}`"))
+}
+
+fn parse_claim(body: &str) -> Result<Fields, String> {
     let mut words = body.split_whitespace();
     let file = words.next().ok_or("missing the mpv file")?;
     let function = words.next().ok_or("missing the mpv function")?;
-    let (mut paths, mut hash) = (None, None);
+    let (mut paths, mut unobservable, mut hash) = (None, BTreeSet::new(), None);
     for word in words {
         match word.split_once('=') {
             Some(("paths", "all")) => paths = Some(Paths::All),
-            Some(("paths", ids)) => {
-                let ids: Result<BTreeSet<usize>, _> = ids.split(',').map(str::parse).collect();
-                paths = Some(Paths::Listed(
-                    ids.map_err(|_| format!("bad path list `{word}`"))?,
-                ));
-            }
+            Some(("paths", ids)) => paths = Some(Paths::Listed(parse_ids(word, ids)?)),
+            Some(("unobservable", ids)) => unobservable = parse_ids(word, ids)?,
             Some(("hash", value)) => hash = Some(value),
             _ => return Err(format!("unknown field `{word}`")),
         }
     }
-    Ok((
-        file.to_owned(),
-        function.to_owned(),
-        paths.ok_or("missing `paths=`")?,
-        hash.ok_or("missing `hash=`")?.to_owned(),
-    ))
+    let paths = paths.ok_or("missing `paths=`")?;
+    if let Paths::Listed(ids) = &paths
+        && let Some(id) = ids.intersection(&unobservable).next()
+    {
+        return Err(format!("path {id} is in both `paths=` and `unobservable=`"));
+    }
+    Ok(Fields {
+        file: file.to_owned(),
+        function: function.to_owned(),
+        paths,
+        unobservable,
+        hash: hash.ok_or("missing `hash=`")?.to_owned(),
+    })
 }
 
 /// Finds escape-hatch words outside comments and string literals.
@@ -237,6 +260,31 @@ mod tests {
         assert_eq!(
             problems("-- mpv-cover: a.c f paths=all hash=abc\n\n#eval 1\n").len(),
             1
+        );
+    }
+
+    #[test]
+    fn unobservable_paths_are_a_separate_list() {
+        let mut scan = Scan::default();
+        scan_file(
+            "M.lean",
+            "-- mpv-cover: a.c f paths=0,1 unobservable=2 hash=abc\ndef m := 1\n",
+            &mut scan,
+        );
+        assert_eq!(scan.problems, Vec::<String>::new());
+        let claim = scan.claims.first().expect("one claim");
+        assert!(matches!(&claim.paths, Paths::Listed(ids) if ids.iter().copied().eq([0, 1])));
+        assert!(claim.unobservable.iter().copied().eq([2]));
+    }
+
+    #[test]
+    fn a_path_cannot_be_both_claimed_and_unobservable() {
+        let problems =
+            problems("-- mpv-cover: a.c f paths=0,1 unobservable=1 hash=abc\ndef m := 1\n");
+        assert_eq!(problems.len(), 1);
+        assert!(
+            problems.iter().all(|problem| problem.contains("both")),
+            "{problems:?}"
         );
     }
 

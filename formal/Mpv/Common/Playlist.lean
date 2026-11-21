@@ -56,7 +56,9 @@ def updateIndexes (pl : Playlist) (start stop : Int) : Playlist :=
   { pl with entries := pl.entries.mapIdx fun n x =>
       if s ≤ (n : Int) ∧ (n : Int) < e then { x with plIndex := n } else x }
 
--- mpv-cover: common/playlist.c playlist_insert_at paths=all hash=5b59e2deca02
+-- Paths 2, 5 and 9 are `mp_assert` failures, which abort; the model takes the
+-- asserted conditions as hypotheses instead. Path 10 only grows the array.
+-- mpv-cover: common/playlist.c playlist_insert_at paths=0,1,3,4,6,7,8 unobservable=10 hash=5b59e2deca02
 def insertAt (pl : Playlist) (add : Entry) (at_ : Option Entry) : Playlist :=
   let index : Int := match at_ with
     | some a => a.plIndex
@@ -65,11 +67,15 @@ def insertAt (pl : Playlist) (add : Entry) (at_ : Option Entry) : Playlist :=
   let pl' := { pl with entries := pl.entries.insertIdx index.toNat add', idAlloc := pl.idAlloc + 1 }
   updateIndexes pl' index pl'.entries.length
 
--- mpv-cover: common/playlist.c playlist_entry_get_rel paths=all hash=5fff8931ad8f
+-- Path 3 is an `mp_assert` failure, which aborts; the model takes the
+-- asserted conditions as hypotheses instead.
+-- mpv-cover: common/playlist.c playlist_entry_get_rel paths=0,1,2,4 hash=5fff8931ad8f
 def entryGetRel (pl : Playlist) (e : Entry) (direction : Int) : Option Entry :=
   if !e.attached then none else entryFromIndex pl (e.plIndex + direction)
 
--- mpv-cover: common/playlist.c playlist_remove paths=all hash=ba66035fec9a
+-- Paths 3 and 6 are `mp_assert` failures, which abort; the model takes the
+-- asserted conditions as hypotheses instead.
+-- mpv-cover: common/playlist.c playlist_remove paths=0,1,2,4,5 hash=ba66035fec9a
 def remove (pl : Playlist) (entry : Entry) : Playlist × Entry :=
   let pl1 := if pl.current = some entry.id then
       { pl with current := (entryGetRel pl entry 1).map (·.id), currentWasReplaced := true }
@@ -86,7 +92,9 @@ def getFirst (pl : Playlist) : Option Entry :=
 def getLast (pl : Playlist) : Option Entry :=
   if pl.entries.length ≠ 0 then pl.entries[pl.entries.length - 1]? else none
 
--- mpv-cover: common/playlist.c playlist_get_next paths=all hash=e80538901518
+-- Paths 3 and 12 are `mp_assert` failures, which abort; the model takes the
+-- asserted conditions as hypotheses instead.
+-- mpv-cover: common/playlist.c playlist_get_next paths=0,1,2,4,5,6,7,8,9,10,11,13,14,15 hash=e80538901518
 def getNext (pl : Playlist) (direction : Int) : Option Entry :=
   match pl.current with
   | none =>

@@ -63,7 +63,32 @@ A path is the function's straight-line body (path 0) or one branch arm: an
 `if` or `else` body, a `case`, a loop body, one side of `?:`, or the right
 operand of a short-circuit `&&` or `||` (it runs only when the left side lets
 it). Use `paths=all` or a list such as `paths=0,2,3`. The hash is a digest of
-the function's source, so the claim goes stale when mpv changes that function.
+the function's original source lines, so the claim goes stale when mpv changes
+that function.
+
+`mpv-cover` finds paths in the preprocessed source, so branches inside macros
+count. It runs `cc -E` on each file with that file's flags from
+`formal/.mpv-build/compile_commands.json`, and keeps only the functions defined
+in the file itself. An arm that a macro expands to belongs to the line that
+invokes the macro, so `mp_assert(x)` has a `?` path (the assertion holds) and a
+`:` path (it fails and aborts) on its own line. The body of a
+`do { } while (0)` is not a separate path, because it always runs once, and
+branches inside `sizeof` are not paths, because `sizeof` never evaluates its
+operand. Without `compile_commands.json`, every command stops and asks for
+`make mpv-build`; pass `--build <dir>` to read another build.
+
+A path that exists in C but whose only effect is memory management or log
+output, such as the branch in `MP_TARRAY_INSERT_AT` that grows the array, can
+be marked `unobservable`:
+
+```lean
+-- mpv-cover: common/playlist.c playlist_insert_at paths=0,1,3,4,6,7,8 unobservable=10 hash=5b59e2deca02
+```
+
+A path cannot be in both lists. With `paths=all`, `unobservable=` takes its
+paths out of `all`. Unobservable paths are never counted as covered. Any other
+path the model does not account for, such as an `mp_assert` failure, stays out
+of both lists.
 
 Print a function's path ids and a ready-made claim line:
 
@@ -77,14 +102,16 @@ cargo run -q --release -p mpv-cover -- show common/playlist.c playlist_get_next
 cargo run -q --release -p mpv-cover -- report                   # totals per mpv directory
 cargo run -q --release -p mpv-cover -- diff                     # files that have claims
 cargo run -q --release -p mpv-cover -- diff player --uncovered  # what is missing in player/
-cargo run -q --release -p mpv-cover -- check --full             # fails until nothing is missing
+cargo run -q --release -p mpv-cover -- check --full             # fails until every path is covered or unobservable
 ```
 
 `diff` prints mpv's source in unified-diff form. A line starting with `-` is on
-a path the model does not account for.
+a path the model does not account for. A line starting with `~` is on an
+unobservable path and on no unaccounted one. `report` prints the number of
+unobservable paths on its own line, under `TOTAL`.
 
 `check` fails when a claim names a missing file, function, or path, when its
-hash is stale, when it has no declaration, or when a Lean file contains
+hash is stale, when one path is both claimed and unobservable, when it has no declaration, or when a Lean file contains
 `sorry`, `axiom`, or another way around the proof checker.
 
 ## Checking the model against mpv
@@ -119,8 +146,11 @@ produces inputs that satisfy mpv's own assertions.
 
 The path counts also miss some of mpv. `report` lists each gap with its size:
 
-- Branches hidden inside macros (`MPMAX`, `MP_TARRAY_INSERT_AT`) are not
-  separate paths.
+- Files the Linux build does not compile (optional features are off) and
+  headers have no compile command, so they are parsed as written. Branches
+  inside the macros they use are not separate paths.
+- In compiled files, code that `#if` leaves out of this build, such as Windows
+  branches, is not counted.
 - Code outside functions, such as option tables, is not counted.
 - Regions the C parser cannot read are not counted.
 - Lua, JavaScript, Objective-C, and Swift sources are not parsed.
@@ -128,5 +158,6 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 ## Modelling conventions
 
 - A C `int` is a Lean `Int`, so overflow is out of the model.
-- Memory management (`talloc`, reference counts) is not modelled.
+- Memory management (`talloc`, reference counts) and log output are not
+  modelled. Paths that only do these are marked `unobservable`.
 - `mp_assert` conditions become theorem hypotheses.

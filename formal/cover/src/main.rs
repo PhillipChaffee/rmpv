@@ -1,12 +1,14 @@
 //! Reports which mpv code paths the Lean model in `formal/` accounts for.
 
 mod claims;
+mod preprocess;
 mod source;
 
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use claims::{Claim, Paths};
 use clap::{Parser, Subcommand};
 use globset::Glob;
+use preprocess::Database;
 use serde::Deserialize;
 use source::{Function, SourceFile};
 use std::{
@@ -14,8 +16,11 @@ use std::{
     fmt::Write as _,
     fs,
     io::Write as _,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     process::{Command, ExitCode},
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
 };
 use walkdir::WalkDir;
 
@@ -31,6 +36,9 @@ struct Cli {
     /// mpv checkout at the locked commit. Defaults to `<formal>/.mpv`.
     #[arg(long)]
     mpv: Option<PathBuf>,
+    /// mpv build holding `compile_commands.json`. Defaults to `<formal>/.mpv-build`.
+    #[arg(long)]
+    build: Option<PathBuf>,
     #[command(subcommand)]
     command: Cmd,
 }
@@ -39,7 +47,8 @@ struct Cli {
 enum Cmd {
     /// Coverage totals per mpv directory.
     Report,
-    /// mpv source as a diff: `-` lines are paths the model does not account for.
+    /// mpv source as a diff: `-` lines are paths the model does not account for, `~` lines
+    /// are unobservable paths.
     Diff {
         /// mpv files or directories. Defaults to files with at least one claim.
         paths: Vec<String>,
@@ -49,7 +58,8 @@ enum Cmd {
     },
     /// One function with its path ids and hash, for writing a claim: `FILE FUNCTION`.
     Show { file: String, function: String },
-    /// Fail on invalid or stale claims. With `--full`, also fail on any uncovered path.
+    /// Fail on invalid or stale claims. With `--full`, also fail on any path that is neither
+    /// covered nor unobservable.
     Check {
         #[arg(long)]
         full: bool,
@@ -77,6 +87,7 @@ struct Exclusion {
 #[derive(Debug, Default)]
 struct Coverage {
     paths: BTreeSet<usize>,
+    unobservable: BTreeSet<usize>,
     declarations: BTreeSet<String>,
     stale: bool,
 }
@@ -100,16 +111,18 @@ struct Tally {
     functions_covered: usize,
     paths: usize,
     paths_covered: usize,
+    paths_unobservable: usize,
     /// Covered paths in functions the fidelity check runs against real mpv.
     paths_checked: usize,
 }
 
 impl Tally {
-    fn add(&mut self, function: &Function, covered: usize, checked: bool) {
+    fn add(&mut self, function: &Function, covered: usize, unobservable: usize, checked: bool) {
         self.functions += 1;
-        self.functions_covered += usize::from(covered == function.arms.len());
+        self.functions_covered += usize::from(covered + unobservable == function.arms.len());
         self.paths += function.arms.len();
         self.paths_covered += covered;
+        self.paths_unobservable += unobservable;
         self.paths_checked += if checked { covered } else { 0 };
     }
 
@@ -128,7 +141,7 @@ impl Tally {
 }
 
 impl Analysis {
-    fn load(formal: &Path, mpv: &Path) -> Result<Self> {
+    fn load(formal: &Path, mpv: &Path, build: &Path) -> Result<Self> {
         let lock: Lock = read_toml(&formal.join("mpv.lock.toml"))?;
         let scope: Scope = read_toml(&formal.join("scope.toml"))?;
         let head = Command::new("git")
@@ -158,7 +171,9 @@ impl Analysis {
                 .excluded
                 .push((exclusion.glob, exclusion.reason, 0));
         }
+        let database = Database::load(build, mpv)?;
 
+        let mut sources = Vec::new();
         let entries = WalkDir::new(mpv)
             .sort_by_file_name()
             .into_iter()
@@ -181,8 +196,7 @@ impl Analysis {
                     excluded.2 += 1;
                 }
             } else if extension == "c" || extension == "h" {
-                let text = String::from_utf8_lossy(&fs::read(entry.path())?).into_owned();
-                analysis.files.push(SourceFile::parse(path, text)?);
+                sources.push(path);
             } else if let Some(language) = UNTRACKED_LANGUAGES.iter().find(|l| **l == extension) {
                 let lines = String::from_utf8_lossy(&fs::read(entry.path())?)
                     .lines()
@@ -190,6 +204,8 @@ impl Analysis {
                 *analysis.untracked_lines.entry(language).or_default() += lines;
             }
         }
+
+        analysis.files = parse_sources(mpv, &sources, &database)?;
 
         analysis.checked = checked_functions(formal)?;
         let scan = claims::scan(formal)?;
@@ -199,6 +215,13 @@ impl Analysis {
                 analysis
                     .problems
                     .push(format!("{}: {problem}", claim.origin));
+            }
+        }
+        for ((file, function), coverage) in &analysis.coverage {
+            if let Some(id) = coverage.paths.intersection(&coverage.unobservable).next() {
+                analysis.problems.push(format!(
+                    "{file} {function}: path {id} is claimed by one declaration and unobservable in another"
+                ));
             }
         }
         Ok(analysis)
@@ -220,15 +243,21 @@ impl Analysis {
                 claim.hash
             );
         }
-        match &claim.paths {
-            Paths::All => coverage.paths.extend(0..path_count),
-            Paths::Listed(ids) => {
-                if let Some(id) = ids.iter().find(|id| **id >= path_count) {
-                    bail!("`{}` has paths 0..{path_count}, not {id}", claim.function);
-                }
-                coverage.paths.extend(ids);
-            }
+        let listed = match &claim.paths {
+            Paths::All => None,
+            Paths::Listed(ids) => Some(ids),
+        };
+        let named = listed.into_iter().flatten().chain(&claim.unobservable);
+        if let Some(id) = named.into_iter().find(|id| **id >= path_count) {
+            bail!("`{}` has paths 0..{path_count}, not {id}", claim.function);
         }
+        match listed {
+            None => coverage
+                .paths
+                .extend((0..path_count).filter(|id| !claim.unobservable.contains(id))),
+            Some(ids) => coverage.paths.extend(ids),
+        }
+        coverage.unobservable.extend(&claim.unobservable);
         Ok(())
     }
 
@@ -242,12 +271,25 @@ impl Analysis {
         function.with_context(|| format!("no function `{name}` in {file}"))
     }
 
-    fn covered_paths(&self, file: &str, function: &Function) -> BTreeSet<usize> {
+    /// The covered and the unobservable paths of a function. Both are empty for a stale claim.
+    fn accounted_paths(
+        &self,
+        file: &str,
+        function: &Function,
+    ) -> (BTreeSet<usize>, BTreeSet<usize>) {
         self.coverage
             .get(&(file.to_owned(), function.name.clone()))
             .filter(|coverage| !coverage.stale)
-            .map(|coverage| coverage.paths.clone())
+            .map(|coverage| (coverage.paths.clone(), coverage.unobservable.clone()))
             .unwrap_or_default()
+    }
+
+    fn tally(&self, tally: &mut Tally, file: &SourceFile) {
+        for function in &file.functions {
+            let (covered, unobservable) = self.accounted_paths(&file.path, function);
+            let checked = self.is_checked(&file.path, function);
+            tally.add(function, covered.len(), unobservable.len(), checked);
+        }
     }
 
     fn is_checked(&self, file: &str, function: &Function) -> bool {
@@ -258,10 +300,7 @@ impl Analysis {
     fn total(&self) -> Tally {
         let mut total = Tally::default();
         for file in &self.files {
-            for function in &file.functions {
-                let covered = self.covered_paths(&file.path, function).len();
-                total.add(function, covered, self.is_checked(&file.path, function));
-            }
+            self.tally(&mut total, file);
         }
         total
     }
@@ -273,11 +312,7 @@ impl Analysis {
                 .path
                 .split_once('/')
                 .map_or(".", |(directory, _)| directory);
-            let tally = by_directory.entry(directory).or_default();
-            for function in &file.functions {
-                let covered = self.covered_paths(&file.path, function).len();
-                tally.add(function, covered, self.is_checked(&file.path, function));
-            }
+            self.tally(by_directory.entry(directory).or_default(), file);
         }
 
         let mut out = format!("mpv @ {}\n\n", self.commit);
@@ -289,7 +324,13 @@ impl Analysis {
         for (directory, tally) in &by_directory {
             out.push_str(&tally.row(directory));
         }
-        out.push_str(&self.total().row("TOTAL"));
+        let total = self.total();
+        out.push_str(&total.row("TOTAL"));
+        let _ = writeln!(
+            out,
+            "{:<12} {:>15} {:>7} paths only manage memory or write logs; not in covered",
+            "unobservable", "", total.paths_unobservable
+        );
 
         let code: usize = self.files.iter().map(|file| file.code_lines).sum();
         let in_functions: usize = self.files.iter().map(|file| file.function_lines).sum();
@@ -297,12 +338,24 @@ impl Analysis {
         out.push_str("\nNot measured by the path counts above:\n");
         let _ = writeln!(
             out,
-            "  {} of {code} C lines sit outside any function (tables, macros, declarations)",
+            "  {} of {code} C lines sit outside any counted function (tables, macros, \
+             declarations, and code that `#if` leaves out of this build)",
             code - in_functions
         );
         let _ = writeln!(
             out,
             "  {unparsed} C lines outside functions are in regions the parser could not read"
+        );
+        let raw = |extension: &str| {
+            let raw = self.files.iter().filter(|file| !file.preprocessed);
+            raw.filter(|file| file.path.ends_with(extension)).count()
+        };
+        let _ = writeln!(
+            out,
+            "  {} .c files not compiled in this build and {} headers are parsed without the \
+             preprocessor, so branches inside their macros are not counted",
+            raw(".c"),
+            raw(".h")
         );
         for (language, lines) in &self.untracked_lines {
             let _ = writeln!(out, "  {lines} lines of .{language} are not parsed");
@@ -345,8 +398,8 @@ impl Analysis {
         for file in self.files.iter().filter(|file| selected(file)) {
             let mut hunks = String::new();
             for function in &file.functions {
-                let covered = self.covered_paths(&file.path, function);
-                if uncovered_only && covered.len() == function.arms.len() {
+                let (covered, unobservable) = self.accounted_paths(&file.path, function);
+                if uncovered_only && covered.len() + unobservable.len() == function.arms.len() {
                     continue;
                 }
                 let key = (file.path.clone(), function.name.clone());
@@ -365,19 +418,29 @@ impl Analysis {
                     }
                     None => "not modelled".to_owned(),
                 };
+                let unobservable_count = if unobservable.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {} unobservable", unobservable.len())
+                };
                 let _ = writeln!(
                     hunks,
-                    "@@ {} : {}/{} paths, {status} @@",
+                    "@@ {} : {}/{} paths{unobservable_count}, {status} @@",
                     function.name,
                     covered.len(),
                     function.arms.len()
                 );
                 for row in function.start_row..=function.end_row {
                     let line_paths = file.row_paths(function, row);
-                    let sign = if line_paths.iter().all(|path| covered.contains(path)) {
-                        ' '
-                    } else {
+                    let sign = if line_paths
+                        .iter()
+                        .any(|path| !covered.contains(path) && !unobservable.contains(path))
+                    {
                         '-'
+                    } else if line_paths.iter().any(|path| unobservable.contains(path)) {
+                        '~'
+                    } else {
+                        ' '
                     };
                     let _ = writeln!(hunks, "{sign}{}", file.line(row));
                 }
@@ -449,6 +512,50 @@ fn checked_functions(formal: &Path) -> Result<BTreeSet<(String, String)>> {
     Ok(checked)
 }
 
+/// Parses every source file, running the preprocessor first for files the build compiles.
+fn parse_sources(mpv: &Path, paths: &[String], database: &Database) -> Result<Vec<SourceFile>> {
+    let parse = |path: &String| -> Result<SourceFile> {
+        let bytes = fs::read(mpv.join(path)).with_context(|| format!("reading {path}"))?;
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        match database.get(path) {
+            Some(compile) => {
+                let preprocessed = compile.preprocess()?;
+                SourceFile::parse_preprocessed(path.clone(), text, &preprocessed)
+            }
+            None => SourceFile::parse(path.clone(), text),
+        }
+    };
+    let next = AtomicUsize::new(0);
+    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    let mut parsed = thread::scope(|scope| {
+        let workers: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(path) = paths.get(index) else {
+                            return done;
+                        };
+                        done.push((index, parse(path)));
+                    }
+                })
+            })
+            .collect();
+        let mut parsed = Vec::with_capacity(paths.len());
+        for worker in workers {
+            parsed.extend(
+                worker
+                    .join()
+                    .map_err(|_| anyhow!("a parser thread panicked"))?,
+            );
+        }
+        Ok::<_, anyhow::Error>(parsed)
+    })?;
+    parsed.sort_by_key(|(index, _)| *index);
+    parsed.into_iter().map(|(_, file)| file).collect()
+}
+
 fn read_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))
@@ -456,22 +563,25 @@ fn read_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
 
 fn run(cli: &Cli) -> Result<(String, bool)> {
     let mpv = cli.mpv.clone().unwrap_or_else(|| cli.formal.join(".mpv"));
-    let analysis = Analysis::load(&cli.formal, &mpv)?;
+    let build = cli
+        .build
+        .clone()
+        .unwrap_or_else(|| cli.formal.join(".mpv-build"));
+    let analysis = Analysis::load(&cli.formal, &mpv, &build)?;
     Ok(match &cli.command {
         Cmd::Report => (analysis.report(), true),
         Cmd::Diff { paths, uncovered } => (analysis.diff(paths, *uncovered), true),
         Cmd::Show { file, function } => (analysis.show(file, function)?, true),
         Cmd::Check { full } => {
             let total = analysis.total();
-            let complete = total.paths_covered == total.paths;
+            let missing = total
+                .paths
+                .saturating_sub(total.paths_covered + total.paths_unobservable);
+            let complete = missing == 0;
             let mut out = total.row("TOTAL");
             out.push_str(&analysis.problem_list());
             if *full && !complete {
-                let _ = writeln!(
-                    out,
-                    "\n{} paths are not modelled",
-                    total.paths - total.paths_covered
-                );
+                let _ = writeln!(out, "\n{missing} paths are not modelled");
             }
             (out, analysis.problems.is_empty() && (complete || !*full))
         }
@@ -493,5 +603,47 @@ fn main() -> ExitCode {
             eprintln!("error: {error:#}");
             ExitCode::from(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn claim(paths: Paths, unobservable: &[usize], hash: &str) -> Claim {
+        Claim {
+            file: "f.c".to_owned(),
+            function: "f".to_owned(),
+            paths,
+            unobservable: unobservable.iter().copied().collect(),
+            hash: hash.to_owned(),
+            declaration: "model".to_owned(),
+            origin: "M.lean:1".to_owned(),
+        }
+    }
+
+    #[test]
+    fn unobservable_paths_are_reported_apart_from_covered_ones() {
+        let text = "void f(int a) {\n    if (a)\n        grow();\n    use(a);\n}\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let hash = file.functions.first().expect("one function").hash.clone();
+        let mut analysis = Analysis {
+            files: vec![file],
+            ..Analysis::default()
+        };
+        analysis
+            .apply(&claim(Paths::All, &[1], &hash))
+            .expect("claim applies");
+
+        let total = analysis.total();
+        assert_eq!(
+            (total.paths, total.paths_covered, total.paths_unobservable),
+            (2, 1, 1)
+        );
+        assert_eq!(total.functions_covered, 1);
+        let diff = analysis.diff(&[], false);
+        assert!(diff.contains("\n~        grow();\n"), "{diff}");
+        assert!(diff.contains("\n     use(a);\n"), "{diff}");
+        assert!(analysis.apply(&claim(Paths::All, &[2], &hash)).is_err());
     }
 }
