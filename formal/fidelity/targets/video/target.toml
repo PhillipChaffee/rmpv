@@ -196,8 +196,8 @@ replace = "if (scale - 1 <= max_change)"
 
 [[mutation]]
 function = "calc_best_speed"
-find = "return -1;\n}\n\nstatic double find_best_speed"
-replace = "return 0;\n}\n\nstatic double find_best_speed"
+find = "return scale;\n    }\n    return -1;"
+replace = "return scale;\n    }\n    return 0;"
 
 [[mutation]]
 function = "find_best_speed"
