@@ -3,6 +3,13 @@
 oracle = "playlist-oracle"
 # The file the harness includes and the mutations edit.
 file = "common/playlist.c"
+# The harness supplies the random numbers playlist_shuffle draws and the
+# demuxer playlist_parse_file opens.
+link_args = [
+  "-Wl,--wrap=mp_rand_in_range32",
+  "-Wl,--wrap=demux_open_url",
+  "-Wl,--wrap=demux_free",
+]
 
 # Each mutation plants one bug in a copy of the file. The check must notice
 # every one. A function counts as checked only if it has a mutation here.
@@ -241,3 +248,188 @@ replace = "strcmp(pl->entries[i]->filename, pl->entries[i]->playlist_path)) {"
 function = "playlist_set_current"
 find = "break;"
 replace = "continue;"
+
+[[mutation]]
+function = "playlist_shuffle"
+find = "pl->entries[n]->original_index = n;"
+replace = "pl->entries[n]->original_index = n + 1;"
+
+[[mutation]]
+function = "playlist_shuffle"
+find = "mp_rand_in_range32(&s, n, pl->num_entries);"
+replace = "mp_rand_in_range32(&s, 0, pl->num_entries);"
+
+[[mutation]]
+function = "playlist_shuffle"
+find = "MPSWAP(struct playlist_entry *, pl->entries[n], pl->entries[j]);"
+replace = "MPSWAP(struct playlist_entry *, pl->entries[0], pl->entries[j]);"
+
+[[mutation]]
+function = "playlist_shuffle"
+find = "for (int n = 0; n < pl->num_entries - 1; n++) {"
+replace = "for (int n = 1; n < pl->num_entries - 1; n++) {"
+
+[[mutation]]
+function = "playlist_shuffle"
+find = "    }\n    playlist_update_indexes(pl, 0, -1);"
+replace = "    }\n    playlist_update_indexes(pl, 1, -1);"
+
+[[mutation]]
+function = "cmp_unshuffle"
+find = "if (ea->original_index >= 0 &&"
+replace = "if (ea->original_index > 0 &&"
+
+[[mutation]]
+function = "cmp_unshuffle"
+find = "ea->original_index != eb->original_index)"
+replace = "ea->original_index > eb->original_index)"
+
+[[mutation]]
+function = "cmp_unshuffle"
+find = "return CMP_INT(ea->original_index, eb->original_index);"
+replace = "return CMP_INT(eb->original_index, ea->original_index);"
+
+[[mutation]]
+function = "cmp_unshuffle"
+find = "return CMP_INT(ea->pl_index, eb->pl_index);"
+replace = "return CMP_INT(eb->pl_index, ea->pl_index);"
+
+[[mutation]]
+function = "playlist_unshuffle"
+find = "if (pl->num_entries)\n        qsort"
+replace = "if (pl->num_entries > 2)\n        qsort"
+
+[[mutation]]
+function = "playlist_unshuffle"
+find = "cmp_unshuffle);\n    playlist_update_indexes(pl, 0, -1);"
+replace = "cmp_unshuffle);\n    playlist_update_indexes(pl, 1, -1);"
+
+[[mutation]]
+function = "playlist_get_first_in_next_playlist"
+find = "strcmp(entry->playlist_path, pl->current->playlist_path) == 0)"
+replace = "strcmp(entry->playlist_path, pl->current->playlist_path) != 0)"
+
+[[mutation]]
+function = "playlist_get_first_in_next_playlist"
+find = "entry = playlist_entry_get_rel(entry, direction);"
+replace = "entry = playlist_entry_get_rel(entry, -direction);"
+
+[[mutation]]
+function = "playlist_get_first_in_next_playlist"
+find = "if (direction < 0)\n        entry = playlist_get_first_in_same_playlist"
+replace = "if (direction > 0)\n        entry = playlist_get_first_in_same_playlist"
+
+[[mutation]]
+function = "playlist_get_first_in_same_playlist"
+find = "mp_path_strip_trailing_separator(playlist_path);"
+replace = ";"
+
+[[mutation]]
+function = "playlist_get_first_in_same_playlist"
+find = "bstr0(talloc_strdup_append(playlist_path, \"/\")))\n#if"
+replace = "bstr0(talloc_strdup_append(playlist_path, \"\")))\n#if"
+
+[[mutation]]
+function = "playlist_get_first_in_same_playlist"
+find = "struct playlist_entry *prev = playlist_entry_get_rel(entry, -1);"
+replace = "struct playlist_entry *prev = playlist_entry_get_rel(entry, 1);"
+
+[[mutation]]
+function = "playlist_get_first_in_same_playlist"
+find = "strcmp(prev->playlist_path, entry->playlist_path) == 0) {"
+replace = "strcmp(prev->playlist_path, entry->playlist_path) != 0) {"
+
+[[mutation]]
+function = "playlist_get_first_in_same_playlist"
+find = "while (prev && prev->playlist_path &&"
+replace = "if (prev && prev->playlist_path &&"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "e->pl = pl;"
+replace = ";"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "e->id = ++pl->id_alloc;"
+replace = "e->id = pl->id_alloc++;"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "playlist_update_indexes(pl, dst_index + count, -1);"
+replace = "playlist_update_indexes(pl, dst_index + count + 1, -1);"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "source_pl->num_entries = 0;"
+replace = ";"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "pl->playlist_completed = source_pl->playlist_completed;"
+replace = "pl->playlist_completed = source_pl->playlist_started;"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "pl->playlist_started = source_pl->playlist_started;"
+replace = ";"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "return first ? first->id : 0;"
+replace = "return first ? first->id : 1;"
+
+[[mutation]]
+function = "playlist_transfer_entries_to"
+find = "return first ? first->id : 0;"
+replace = "return first ? first->id + 1 : 0;"
+
+[[mutation]]
+function = "playlist_transfer_entries"
+find = "int add_at = pl->num_entries;"
+replace = "int add_at = 0;"
+
+[[mutation]]
+function = "playlist_transfer_entries"
+find = "add_at = pl->current->pl_index + 1;"
+replace = "add_at = pl->current->pl_index;"
+
+[[mutation]]
+function = "playlist_transfer_entries"
+find = "add_at += 1;"
+replace = "add_at -= 1;"
+
+[[mutation]]
+function = "playlist_append_entries"
+find = "return playlist_transfer_entries_to(pl, pl->num_entries, source_pl);"
+replace = "return playlist_transfer_entries_to(pl, 0, source_pl);"
+
+[[mutation]]
+function = "playlist_parse_file"
+find = ".force_format = \"playlist\","
+replace = ".force_format = \"m3u\","
+
+[[mutation]]
+function = "playlist_parse_file"
+find = ".stream_flags = STREAM_ORIGIN_DIRECT,"
+replace = ".stream_flags = STREAM_ORIGIN_FS,"
+
+[[mutation]]
+function = "playlist_parse_file"
+find = "demux_open_url(path, &p, cancel, global);"
+replace = "demux_open_url(file, &p, cancel, global);"
+
+[[mutation]]
+function = "playlist_parse_file"
+find = "if (!d)\n        goto done;"
+replace = "if (d)\n        goto done;"
+
+[[mutation]]
+function = "playlist_parse_file"
+find = "playlist_populate_playlist_path(d->playlist, file);"
+replace = ";"
+
+[[mutation]]
+function = "playlist_parse_file"
+find = "playlist_transfer_entries(ret, d->playlist);"
+replace = ";"

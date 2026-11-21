@@ -48,13 +48,34 @@ const FILES: [(&str, &str); 12] = [
 ];
 
 /// Playlist paths; most equal a stored filename so `playlist_set_current` matches.
-const PATHS: [&str; 6] = ["/a", "/b", "/a/b/c", "/", "http://h/x", "/other"];
+/// Some are a prefix of another, with and without a trailing separator, for
+/// `playlist_get_first_in_same_playlist`.
+const PATHS: [&str; 8] = [
+    "/a",
+    "/b",
+    "/a/b/c",
+    "/",
+    "http://h/x",
+    "/other",
+    "/a/",
+    "/a/b",
+];
+
+/// Playlist files for `playlist_parse_file`. `mp_get_user_path` expands the second.
+const PLAYLIST_FILES: [&str; 2] = ["/lists/one", "~/two"];
+
+/// Most playlists stay shorter than this so boundaries are hit often.
+const SHORT: i64 = 6;
+/// Transfers may grow a playlist up to this.
+const LONGEST: i64 = 9;
 
 #[derive(Debug)]
 struct Entry {
     token: u64,
     filename: &'static str,
     playlist_path: Option<&'static str>,
+    /// C `original_index`: `-1` until the playlist is shuffled.
+    original_index: i64,
 }
 
 /// The entry the harness holds a reference on.
@@ -65,15 +86,47 @@ struct Held {
     listed: bool,
 }
 
+/// C `playlist_completed` and `playlist_started`, which a transfer copies.
+#[derive(Clone, Copy, Debug, Default)]
+struct Progress {
+    completed: bool,
+    started: bool,
+}
+
 /// What the generator must know about the playlist to stay within the C
 /// functions' preconditions.
 #[derive(Debug, Default)]
 struct Shadow {
     entries: Vec<Entry>,
     current: Option<u64>,
+    current_was_replaced: bool,
+    progress: Progress,
     has_dir: bool,
     held: Option<Held>,
     tokens: u64,
+    /// The second playlist, which the transfer functions empty into the first.
+    source: Vec<Entry>,
+    source_progress: Progress,
+}
+
+/// `playlist_shuffle` with the harness's replacement for `mp_rand_in_range32`.
+fn shuffle(entries: &mut [Entry], numbers: &[i64]) {
+    for (index, entry) in entries.iter_mut().enumerate() {
+        entry.original_index = i64::try_from(index).unwrap_or(0);
+    }
+    let len = entries.len();
+    for (index, number) in numbers.iter().enumerate().take(len.saturating_sub(1)) {
+        let pick = index + usize::try_from(*number).unwrap_or(0) % (len - index);
+        entries.swap(index, pick);
+    }
+}
+
+/// One number per call `playlist_shuffle` makes to `mp_rand_in_range32`.
+fn shuffle_numbers(rng: &mut Rng, len: usize) -> (Vec<i64>, String) {
+    let numbers: Vec<i64> = (1..len).map(|_| rng.range(0, 99)).collect();
+    let words: Vec<String> = numbers.iter().map(|number| format!(" {number}")).collect();
+    let text = format!("{}{}", numbers.len(), words.concat());
+    (numbers, text)
 }
 
 impl Shadow {
@@ -86,15 +139,85 @@ impl Shadow {
         self.entries.get(index).map(|entry| entry.token)
     }
 
-    fn insert(&mut self, at: i64, filename: &'static str) {
+    fn source_len(&self) -> i64 {
+        i64::try_from(self.source.len()).unwrap_or(0)
+    }
+
+    fn new_entry(&mut self, filename: &'static str) -> Entry {
         self.tokens += 1;
-        let entry = Entry {
+        Entry {
             token: self.tokens,
             filename,
             playlist_path: None,
-        };
+            original_index: -1,
+        }
+    }
+
+    fn insert(&mut self, at: i64, filename: &'static str) {
+        let entry = self.new_entry(filename);
         let index = usize::try_from(at).unwrap_or(self.entries.len());
         self.entries.insert(index.min(self.entries.len()), entry);
+    }
+
+    fn source_insert(&mut self, at: i64, filename: &'static str) {
+        let entry = self.new_entry(filename);
+        let index = usize::try_from(at).unwrap_or(self.source.len());
+        self.source.insert(index.min(self.source.len()), entry);
+    }
+
+    fn current_index(&self) -> Option<usize> {
+        let current = self.current?;
+        self.entries.iter().position(|entry| entry.token == current)
+    }
+
+    /// libc defines `qsort` only for a consistent order. `cmp_unshuffle` is one
+    /// exactly when no entry with an unknown original index follows one with a
+    /// known index.
+    fn can_unshuffle(&self) -> bool {
+        self.entries
+            .iter()
+            .skip_while(|entry| entry.original_index < 0)
+            .all(|entry| entry.original_index >= 0)
+    }
+
+    /// `playlist_get_first_in_next_playlist` reads `pl->current->playlist_path`
+    /// without checking `pl->current`. This is false when that would crash.
+    fn can_next_playlist(&self, direction: i64) -> bool {
+        if self.current.is_some() || self.entries.is_empty() {
+            return true;
+        }
+        if self.progress.completed && direction < 0 {
+            return false;
+        }
+        if !self.progress.started && direction > 0 {
+            return self
+                .entries
+                .first()
+                .is_some_and(|entry| entry.playlist_path.is_none());
+        }
+        true
+    }
+
+    /// Where `playlist_transfer_entries` inserts, when its assertions hold.
+    fn transfer_index(&self) -> Option<usize> {
+        let Some(current) = self.current_index() else {
+            return Some(self.entries.len());
+        };
+        let index = current + 1 + usize::from(self.current_was_replaced);
+        (index <= self.entries.len()).then_some(index)
+    }
+
+    fn drop_source(&mut self) {
+        self.source.clear();
+        self.source_progress = Progress::default();
+    }
+
+    fn transfer(&mut self, at: usize) {
+        let moved = std::mem::take(&mut self.source);
+        let at = at.min(self.entries.len());
+        self.entries.splice(at..at, moved);
+        self.progress = self.source_progress;
+        self.drop_source();
     }
 
     fn remove(&mut self, index: usize) {
@@ -104,6 +227,7 @@ impl Shadow {
         let entry = self.entries.remove(index);
         if self.current == Some(entry.token) {
             self.current = self.entries.get(index).map(|next| next.token);
+            self.current_was_replaced = true;
         }
         if let Some(held) = self.held.as_mut()
             && held.token == entry.token
@@ -119,6 +243,11 @@ impl Shadow {
             if !(keep_current && token == self.current) {
                 self.remove(index);
             }
+        }
+        self.progress = Progress::default();
+        if !keep_current {
+            self.current_was_replaced = false;
+            self.has_dir = false;
         }
     }
 
@@ -199,14 +328,13 @@ fn operation(rng: &mut Rng, shadow: &mut Shadow) -> String {
     let len = shadow.len();
     let last = len - 1;
     let (file, stored) = rng.pick(&FILES).unwrap_or(("/a", "/a"));
-    match rng.range(0, 31) {
-        // Keep playlists short so boundaries are hit often.
-        0..=3 if len < 6 => {
+    match rng.range(0, 48) {
+        0..=3 if len < SHORT => {
             let at = rng.range(-1, last);
             shadow.insert(at, stored);
             format!("insert {at} {file}")
         }
-        4 | 5 if len < 6 => {
+        4 | 5 if len < SHORT => {
             shadow.insert(-1, stored);
             format!("append {file}")
         }
@@ -217,7 +345,6 @@ fn operation(rng: &mut Rng, shadow: &mut Shadow) -> String {
         }
         8 if rng.next().is_multiple_of(2) => {
             shadow.clear(false);
-            shadow.has_dir = false;
             "clear".to_owned()
         }
         9 if rng.next().is_multiple_of(2) => {
@@ -234,12 +361,19 @@ fn operation(rng: &mut Rng, shadow: &mut Shadow) -> String {
             shadow.current = shadow.token_at(index);
             format!("setcur {index}")
         }
-        14 => format!(
-            "flags {} {} {}",
-            rng.range(0, 1),
-            rng.range(0, 1),
-            rng.range(0, 1)
-        ),
+        14 => {
+            shadow.current_was_replaced = rng.next().is_multiple_of(2);
+            shadow.progress = Progress {
+                completed: rng.next().is_multiple_of(2),
+                started: rng.next().is_multiple_of(2),
+            };
+            format!(
+                "flags {} {} {}",
+                i32::from(shadow.current_was_replaced),
+                i32::from(shadow.progress.completed),
+                i32::from(shadow.progress.started)
+            )
+        }
         15 => {
             shadow.has_dir = rng.next().is_multiple_of(2);
             format!("setdir {}", i32::from(shadow.has_dir))
@@ -307,6 +441,90 @@ fn operation(rng: &mut Rng, shadow: &mut Shadow) -> String {
             rng.range(-3, len + 3),
             rng.range(-3, len + 3)
         ),
+        32 | 33 => {
+            let (numbers, text) = shuffle_numbers(rng, shadow.entries.len());
+            shuffle(&mut shadow.entries, &numbers);
+            format!("shuffle {text}")
+        }
+        34 | 35 if shadow.can_unshuffle() => {
+            // Stable, so entries with equal original indexes keep their order.
+            shadow.entries.sort_by_key(|entry| entry.original_index);
+            "unshuffle".to_owned()
+        }
+        36 if len > 0 => format!("cmp {} {}", rng.range(0, last), rng.range(0, last)),
+        37 | 38 => {
+            let direction = rng.direction();
+            if shadow.can_next_playlist(direction) {
+                format!("nextpl {direction}")
+            } else {
+                format!("next {direction}")
+            }
+        }
+        39 => {
+            let entry = if shadow.held.is_some() && rng.next().is_multiple_of(8) {
+                -3
+            } else {
+                rng.range(-2, last)
+            };
+            let path = if rng.next().is_multiple_of(8) {
+                "~"
+            } else {
+                rng.pick(&PATHS).unwrap_or("/a")
+            };
+            format!("samepl {entry} {path}")
+        }
+        40 | 41 if shadow.source_len() < 4 => {
+            let at = rng.range(-1, shadow.source_len() - 1);
+            shadow.source_insert(at, stored);
+            format!("srcinsert {at} {file}")
+        }
+        42 => {
+            let path = rng.pick(&PATHS).unwrap_or("/a");
+            for entry in &mut shadow.source {
+                entry.playlist_path = Some(path);
+            }
+            format!("srcpopulate {path}")
+        }
+        43 if rng.next().is_multiple_of(2) => {
+            shadow.source_progress = Progress {
+                completed: rng.next().is_multiple_of(2),
+                started: rng.next().is_multiple_of(2),
+            };
+            format!(
+                "srcflags {} {}",
+                i32::from(shadow.source_progress.completed),
+                i32::from(shadow.source_progress.started)
+            )
+        }
+        43 => format!("srcsetcur {}", rng.range(-1, shadow.source_len() - 1)),
+        44 if rng.next().is_multiple_of(2) => {
+            let (numbers, text) = shuffle_numbers(rng, shadow.source.len());
+            shuffle(&mut shadow.source, &numbers);
+            format!("srcshuffle {text}")
+        }
+        44 | 45 if len + shadow.source_len() <= LONGEST => {
+            let at = rng.range(0, len);
+            shadow.transfer(usize::try_from(at).unwrap_or(0));
+            format!("transferto {at}")
+        }
+        46 if len + shadow.source_len() <= LONGEST && shadow.transfer_index().is_some() => {
+            let at = shadow.transfer_index().unwrap_or(0);
+            shadow.transfer(at);
+            "transfer".to_owned()
+        }
+        47 if len + shadow.source_len() <= LONGEST => {
+            shadow.transfer(shadow.entries.len());
+            "appendentries".to_owned()
+        }
+        48 => {
+            let file = rng.pick(&PLAYLIST_FILES).unwrap_or("/lists/one");
+            let kind = rng.range(0, 2);
+            let filetype = rng.pick(&["~", "hls", "m3u"]).unwrap_or("~");
+            if kind == 2 {
+                shadow.drop_source();
+            }
+            format!("parse {file} {kind} {filetype}")
+        }
         _ => format!("next {}", rng.direction()),
     }
 }

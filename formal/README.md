@@ -7,7 +7,7 @@ real code.
 
 | Path | Role |
 | --- | --- |
-| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c`. |
+| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c`; `PlaylistTheorems.lean` holds more of its proofs. |
 | `mpv.lock.toml` | The mpv commit the model describes. |
 | `scope.toml` | mpv files left out on purpose, each with a reason. |
 | `cover/` | The `mpv-cover` tool. |
@@ -188,4 +188,11 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 - A callee in a file the model does not cover yet is a parameter of the
   definition, as `mp_normalize_path` is for `entryNew`. The oracle supplies a
   stand-in that is right for the inputs the generator emits.
+- A callee whose result the test must control, such as the random number
+  generator or the demuxer, is replaced in the harness with `--wrap`. The
+  oracle passes the model the same replacement.
+- A libc routine is a parameter too. `qsort` has a defined result only when the
+  comparison is a consistent total order, so the theorems about
+  `playlist_unshuffle` assume that result and the generator sorts only such
+  arrays.
 - `mp_assert` conditions become theorem hypotheses.

@@ -206,6 +206,153 @@ def getNext (pl : Playlist) (direction : Int) : Option Entry :=
       else if pl.currentWasReplaced then some cur
       else entryGetRel pl cur 1
 
+/-- Exchanges `l[i]` and `l[j]`. `playlist_shuffle` only passes indexes inside
+the array, so the out-of-range case is never used. -/
+def swap (l : List Entry) (i j : Nat) : List Entry :=
+  match l[i]?, l[j]? with
+  | some a, some b => (l.set i b).set j a
+  | _, _ => l
+
+/-- `rand k min max` stands for the result of the `k`-th call
+`mp_rand_in_range32(&s, min, max)`, which lives in `misc/random.c`. -/
+-- mpv-cover: common/playlist.c playlist_shuffle paths=all hash=576516b0175a
+def shuffle (rand : Nat → Nat → Nat → Nat) (pl : Playlist) : Playlist :=
+  let marked := pl.entries.mapIdx fun n e => { e with originalIndex := n }
+  let swapped := (List.range (marked.length - 1)).foldl
+    (fun l n => swap l n (rand n n marked.length)) marked
+  updateIndexes { pl with entries := swapped } 0 (-1)
+
+/-- C `CMP_INT`. -/
+def cmpInt (a b : Int) : Int := if a = b then 0 else if a > b then 1 else -1
+
+-- mpv-cover: common/playlist.c cmp_unshuffle paths=all hash=db83bd73a93d
+def cmpUnshuffle (a b : Entry) : Int :=
+  if a.originalIndex ≥ 0 ∧ a.originalIndex ≠ b.originalIndex then
+    cmpInt a.originalIndex b.originalIndex
+  else cmpInt a.plIndex b.plIndex
+
+/-- `sort` stands for libc's `qsort`. C defines its result only when the
+comparison is a consistent total order on the array. `cmpUnshuffle` is one
+exactly when no entry with `original_index < 0` sits after an entry with
+`original_index ≥ 0`. -/
+-- mpv-cover: common/playlist.c playlist_unshuffle paths=all hash=7915cb6c1d73
+def unshuffle (sort : (Entry → Entry → Int) → List Entry → List Entry) (pl : Playlist) :
+    Playlist :=
+  let sorted := if pl.entries.length ≠ 0 then sort cmpUnshuffle pl.entries else pl.entries
+  updateIndexes { pl with entries := sorted } 0 (-1)
+
+/-- The last loop of `playlist_get_first_in_same_playlist`: step back while the
+previous entry has `path`. `fuel` bounds the steps; the playlist length is enough. -/
+def firstWithPath (pl : Playlist) (path : String) : Nat → Entry → Entry
+  | 0, entry => entry
+  | fuel + 1, entry =>
+    match entryGetRel pl entry (-1) with
+    | some prev =>
+      if prev.playlistPath = some path then firstWithPath pl path fuel prev else entry
+    | none => entry
+
+/-- `stripTrailingSeparator` stands for `mp_path_strip_trailing_separator` in
+`misc/path_utils.c`. `pl` is the playlist `entry` is in. A NULL
+`current_playlist_path` is `none`; C reads it as the empty string. -/
+-- mpv-cover: common/playlist.c playlist_get_first_in_same_playlist paths=all hash=e34dd7dd3568
+def getFirstInSamePlaylist (stripTrailingSeparator : String → String) (pl : Playlist)
+    (entry : Option Entry) (currentPlaylistPath : Option String) : Option Entry :=
+  match entry with
+  | none => none
+  | some e =>
+    match e.playlistPath with
+    | none => some e
+    | some path =>
+      if (currentPlaylistPath.getD "").startsWith (stripTrailingSeparator path ++ "/") then some e
+      else some (firstWithPath pl path pl.entries.length e)
+
+/-- The first loop of `playlist_get_first_in_next_playlist`: step in `direction`
+while the entry has the current entry's playlist path. -/
+def skipCurrentPlaylist (pl : Playlist) (currentPath : Option String) (direction : Int) :
+    Nat → Option Entry → Option Entry
+  | _, none => none
+  | 0, some e => some e
+  | fuel + 1, some e =>
+    if e.playlistPath.isSome ∧ e.playlistPath = currentPath then
+      skipCurrentPlaylist pl currentPath direction fuel (entryGetRel pl e direction)
+    else some e
+
+/-- C reads `pl->current->playlist_path` without checking `pl->current`. With
+no current entry that is a NULL dereference, unless `playlist_get_next` returns
+NULL, or `direction > 0` and the entry it returns has no playlist path. The
+model describes mpv only outside that case. -/
+-- mpv-cover: common/playlist.c playlist_get_first_in_next_playlist paths=all hash=f002fa38c1ea
+def getFirstInNextPlaylist (stripTrailingSeparator : String → String) (pl : Playlist)
+    (direction : Int) : Option Entry :=
+  match getNext pl direction with
+  | none => none
+  | some next =>
+    let currentPath :=
+      (pl.current.bind fun c => pl.entries.find? (·.id = c)).bind (·.playlistPath)
+    let entry := skipCurrentPlaylist pl currentPath direction pl.entries.length (some next)
+    if direction < 0 then getFirstInSamePlaylist stripTrailingSeparator pl entry currentPath
+    else entry
+
+/-- Returns the destination, the emptied source, and the C return value. C
+leaves `source_pl->current` pointing at its old entry, which now has its new
+`id`. Path 5 only grows the array. -/
+-- mpv-cover: common/playlist.c playlist_transfer_entries_to paths=all unobservable=5 hash=e4ff7d64587f
+def transferEntriesTo (pl : Playlist) (dstIndex : Int) (source : Playlist) :
+    Playlist × Playlist × Int :=
+  let moved := source.entries.mapIdx fun n e =>
+    { e with attached := true, plIndex := dstIndex + n, id := pl.idAlloc + n + 1 }
+  let entries := pl.entries.take dstIndex.toNat ++ moved ++ pl.entries.drop dstIndex.toNat
+  let inserted := { pl with entries, idAlloc := pl.idAlloc + moved.length }
+  let reindexed := updateIndexes inserted (dstIndex + moved.length) (-1)
+  let first : Int := match moved.head? with
+    | some e => e.id
+    | none => 0
+  ({ reindexed with playlistCompleted := source.playlistCompleted,
+                    playlistStarted := source.playlistStarted },
+   { source with
+     entries := [],
+     current := source.current.bind fun c =>
+       (source.entries.findIdx? (·.id = c)).map (pl.idAlloc + · + 1) },
+   first)
+
+-- mpv-cover: common/playlist.c playlist_transfer_entries paths=all hash=fd28ee17dba3
+def transferEntries (pl source : Playlist) : Playlist × Playlist × Int :=
+  let addAt : Int := match pl.current.bind fun c => pl.entries.find? (·.id = c) with
+    | none => pl.entries.length
+    | some current =>
+      if pl.currentWasReplaced then current.plIndex + 1 + 1 else current.plIndex + 1
+  transferEntriesTo pl addAt source
+
+-- mpv-cover: common/playlist.c playlist_append_entries paths=all hash=905608b24dbc
+def appendEntries (pl source : Playlist) : Playlist × Playlist × Int :=
+  transferEntriesTo pl pl.entries.length source
+
+/-- C `talloc_zero(NULL, struct playlist)`. -/
+def Playlist.zeroed : Playlist :=
+  { entries := [], current := none, currentWasReplaced := false, playlistCompleted := false,
+    playlistStarted := false, playlistDir := none, idAlloc := 0 }
+
+/-- What `playlist_parse_file` reads from the demuxer `demux_open_url` returns. -/
+structure Demuxer where
+  playlist : Option Playlist
+  filetype : Option String
+
+/-- `getUserPath` stands for `mp_get_user_path` in `options/path.c`, and
+`demuxOpenUrl path forceFormat streamFlags` for `demux_open_url` in
+`demux/demux.c`; `none` is a NULL demuxer. The demuxer and its emptied playlist
+are freed, so only the new playlist is returned. Paths 4 to 9 only choose which
+message to log; the file type is read for nothing else. -/
+-- mpv-cover: common/playlist.c playlist_parse_file paths=0,1,2,3 unobservable=4,5,6,7,8,9 hash=2f4861660fd5
+def parseFile (getUserPath : String → String)
+    (demuxOpenUrl : String → String → Int → Option Demuxer) (file : String) : Option Playlist :=
+  match demuxOpenUrl (getUserPath file) "playlist" streamOriginDirect with
+  | none => none
+  | some demuxer =>
+    match demuxer.playlist with
+    | none => none
+    | some playlist =>
+      some (transferEntries Playlist.zeroed (populatePlaylistPath playlist file)).1
+
 /-! ## Theorems -/
 
 theorem updateIndexes_length (pl : Playlist) (s e : Int) :
