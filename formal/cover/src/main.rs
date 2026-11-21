@@ -244,9 +244,11 @@ impl Analysis {
 
         analysis.files = parse_sources(mpv, &sources, &database)?;
 
-        analysis.checked = checked_functions(formal)?;
+        let bugs = checked_functions(formal, &analysis.files)?;
+        analysis.checked = bugs.checked;
         let scan = claims::scan(formal)?;
         analysis.problems = scan.problems;
+        analysis.problems.extend(bugs.problems);
         for claim in scan.claims {
             if let Err(problem) = analysis.apply(&claim) {
                 analysis
@@ -389,6 +391,12 @@ impl Analysis {
             out,
             "{:<12} {:>15} {:>7} paths fail an assertion in modelled functions; not in covered",
             "asserted", "", total.paths_asserted
+        );
+        let _ = writeln!(
+            out,
+            "{:<12} covered paths in functions with at least one planted bug that mpv-fidelity \
+             must catch; sensitivity is shown per function, not per path",
+            "checked"
         );
 
         let code: usize = self.files.iter().map(|file| file.code_lines).sum();
@@ -572,26 +580,82 @@ struct FidelityTarget {
 #[derive(Debug, Deserialize)]
 struct PlantedBug {
     function: String,
+    find: String,
 }
 
-fn checked_functions(formal: &Path) -> Result<BTreeSet<(String, String)>> {
-    let mut checked = BTreeSet::new();
-    let Ok(targets) = fs::read_dir(formal.join("fidelity/targets")) else {
-        return Ok(checked);
+/// The functions with a planted bug that sits where its label says, and a problem for every
+/// bug that does not.
+#[derive(Debug, Default)]
+struct PlantedBugs {
+    checked: BTreeSet<(String, String)>,
+    problems: Vec<String>,
+}
+
+/// What is wrong with a bug's label, if anything: the function it names must exist in the
+/// file, and its `find` text must lie within that function's lines wherever it occurs.
+fn label_problem(source: &SourceFile, bug: &PlantedBug) -> Option<String> {
+    let file = &source.path;
+    let named = |function: &&Function| function.name == bug.function;
+    let Some(function) = source.functions.iter().find(named) else {
+        return Some(format!("but {file} has no such function"));
     };
-    for target in targets {
-        let manifest = target?.path().join("target.toml");
-        if manifest.exists() {
-            let target: FidelityTarget = read_toml(&manifest)?;
-            checked.extend(
-                target
-                    .mutation
-                    .into_iter()
-                    .map(|bug| (target.file.clone(), bug.function)),
-            );
+    let within = source.byte_range(function);
+    let inside = |at: usize| within.start <= at && at + bug.find.len() <= within.end;
+    let mut starts = source.text().match_indices(&bug.find).map(|(at, _)| at);
+    if !source.text().contains(&bug.find) {
+        Some(format!("but its `find` text does not occur in {file}"))
+    } else if starts.all(inside) {
+        None
+    } else {
+        Some(format!(
+            "but its `find` text is outside that function in {file}"
+        ))
+    }
+}
+
+/// Checks one target's labels. A label is all that ties a bug to a function, so one that
+/// names the wrong function would mark that function checked for nothing.
+fn planted_bugs(manifest: &str, target: &FidelityTarget, files: &[SourceFile]) -> PlantedBugs {
+    let mut bugs = PlantedBugs::default();
+    let file = &target.file;
+    let Some(source) = files.iter().find(|source| source.path == *file) else {
+        bugs.problems
+            .push(format!("{manifest}: no in-scope mpv file `{file}`"));
+        return bugs;
+    };
+    for (index, bug) in target.mutation.iter().enumerate() {
+        if let Some(problem) = label_problem(source, bug) {
+            bugs.problems.push(format!(
+                "{manifest}: mutation {} names `{}`, {problem}",
+                index + 1,
+                bug.function
+            ));
+        } else {
+            bugs.checked.insert((file.clone(), bug.function.clone()));
         }
     }
-    Ok(checked)
+    bugs
+}
+
+/// Every target's planted bugs.
+fn checked_functions(formal: &Path, files: &[SourceFile]) -> Result<PlantedBugs> {
+    let mut all = PlantedBugs::default();
+    let Ok(targets) = fs::read_dir(formal.join("fidelity/targets")) else {
+        return Ok(all);
+    };
+    let mut manifests = Vec::new();
+    for target in targets {
+        manifests.push(target?.path().join("target.toml"));
+    }
+    manifests.sort();
+    for manifest in manifests.iter().filter(|manifest| manifest.exists()) {
+        let target: FidelityTarget = read_toml(manifest)?;
+        let name = manifest.strip_prefix(formal).unwrap_or(manifest);
+        let bugs = planted_bugs(&name.display().to_string(), &target, files);
+        all.checked.extend(bugs.checked);
+        all.problems.extend(bugs.problems);
+    }
+    Ok(all)
 }
 
 fn asserted_paths(function: &Function) -> BTreeSet<usize> {
@@ -769,6 +833,61 @@ mod tests {
         let diff = analysis.diff(&[], false);
         assert!(diff.contains("\n!    mp_assert(a);\n"), "{diff}");
         assert!(diff.contains("\n         use(a);\n"), "{diff}");
+    }
+
+    #[test]
+    fn a_planted_bug_counts_only_where_its_label_says_it_is() {
+        let text = "int f(int a) {\n    return a + 1;\n}\n\nint g(int a) {\n    if (a)\n        return a + 2;\n    return 0;\n}\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let manifest = r#"
+            file = "f.c"
+            [[mutation]]
+            function = "f"
+            find = "return a + 1;"
+            [[mutation]]
+            function = "g"
+            find = "if (a)\n        return a + 2;"
+            [[mutation]]
+            function = "g"
+            find = "return a + 1;"
+            [[mutation]]
+            function = "h"
+            find = "return a + 2;"
+            [[mutation]]
+            function = "f"
+            find = "return a + 3;"
+            [[mutation]]
+            function = "f"
+            find = "return a + 1;\n}\n\nint g"
+            [[mutation]]
+            function = "g"
+            find = "return"
+        "#;
+        let target: FidelityTarget = toml::from_str(manifest).expect("manifest parses");
+
+        let bugs = planted_bugs("t/target.toml", &target, &[file]);
+
+        let function = |name: &str| ("f.c".to_owned(), name.to_owned());
+        assert_eq!(bugs.checked, [function("f"), function("g")].into());
+        assert_eq!(
+            bugs.problems,
+            [
+                "t/target.toml: mutation 3 names `g`, but its `find` text is outside that function in f.c",
+                "t/target.toml: mutation 4 names `h`, but f.c has no such function",
+                "t/target.toml: mutation 5 names `f`, but its `find` text does not occur in f.c",
+                "t/target.toml: mutation 6 names `f`, but its `find` text is outside that function in f.c",
+                "t/target.toml: mutation 7 names `g`, but its `find` text is outside that function in f.c",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_planted_bug_in_a_file_out_of_scope_is_a_problem() {
+        let manifest = "file = \"g.c\"\n[[mutation]]\nfunction = \"f\"\nfind = \"x\"\n";
+        let target: FidelityTarget = toml::from_str(manifest).expect("manifest parses");
+        let bugs = planted_bugs("t/target.toml", &target, &[]);
+        assert!(bugs.checked.is_empty());
+        assert_eq!(bugs.problems, ["t/target.toml: no in-scope mpv file `g.c`"]);
     }
 
     #[test]

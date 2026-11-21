@@ -169,6 +169,20 @@ impl SourceFile {
         self.text.get(start..end.max(start)).unwrap_or_default()
     }
 
+    /// The original text, as `byte_range` indexes it.
+    pub(crate) fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The bytes of the original text from the function's first line through its last.
+    pub(crate) fn byte_range(&self, function: &Function) -> std::ops::Range<usize> {
+        let line_start = |row| {
+            let start: Option<&usize> = self.line_starts.get(row);
+            start.copied().unwrap_or(self.text.len())
+        };
+        line_start(function.start_row)..line_start(function.end_row + 1)
+    }
+
     /// The path ids a source line belongs to. Empty for blank lines.
     pub(crate) fn row_paths(&self, function: &Function, row: usize) -> Vec<usize> {
         let Some(offset) = self.row_offsets.get(row).copied().flatten() else {

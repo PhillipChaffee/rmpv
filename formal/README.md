@@ -140,7 +140,10 @@ unobservable and asserted paths on their own lines, under `TOTAL`.
 `check` fails when a claim names a missing file, function, or path, when its
 hash is stale, when one path is both claimed and unobservable, when it lists
 an `assert` path, when it has no declaration, or when a Lean file contains
-`sorry`, `axiom`, or another way around the proof checker.
+`sorry`, `axiom`, or another way around the proof checker. It also fails when a
+planted bug in a `target.toml` names a function that is not in the target's
+file, or has `find` text that is not all within that function's lines: the
+label is what marks a function as checked. `report` lists the same problems.
 
 ## Checking the model against mpv
 
@@ -183,7 +186,11 @@ an edited copy of the file.
 
 A covered path means a Lean declaration claims to model it and the claim is
 current. The `checked` column in `report` counts covered paths in functions
-that `mpv-fidelity` runs against real mpv.
+that have at least one planted bug in a `target.toml`, which `mpv-fidelity`
+must catch. `mpv-cover` reads the manifests; it does not run `mpv-fidelity`, so
+the column is only as good as the last `make proofs`. It shows sensitivity per
+function, not per path: one caught bug marks every covered path of its
+function as checked, whichever path the bug is on.
 
 Checked is strong evidence, not proof. It is random testing, so an input the
 generator never produces can still hide a difference. The generator only
