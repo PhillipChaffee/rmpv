@@ -159,15 +159,17 @@ theorem getCurrentChapter_lt_count_iff (c : Ctx) (some_chapters : c.chapters.siz
   split <;> omega
 
 /-- The result is at least -2 and less than the chapter count, provided
-`last_chapter_seek` is. The hypotheses are not an invariant of mpv. `high`
-holds from the start of a file (the field is -2) and still holds right after a
-chapter seek (command.c stores only a chapter `chapter_start_time` accepted).
-It can fail later: the seek clears `last_chapter_flag` but leaves
+`last_chapter_seek` is. `low` is an invariant of mpv: the field is only ever
+-2 or a chapter `chapter_start_time` accepted, which is at least -1. `high` is
+not. It holds from the start of a file (the field is -2) and still holds right
+after a chapter seek (command.c stores only an accepted chapter). It can fail
+later: the seek clears `last_chapter_flag` but leaves
 `last_chapter_seek`, and both a runtime `chapter-list` change and a demuxer
 chapter update replace the chapter list without resetting the field. After a
 seek to chapter 4, a new list of 2 chapters makes `get_current_chapter` return
 4, at or above the count, until a seek of another kind or a new file resets the
-field. `getCurrentChapter_lt_count_iff` is the fact that holds without the
+field, or a new chapter seek overwrites it with a valid chapter.
+`getCurrentChapter_lt_count_iff` is the fact that holds without the
 hypotheses, and `getCurrentChapter_from_position` gives the lower bound -1
 when no seek is pending. -/
 theorem getCurrentChapter_bounds (c : Ctx) (low : -2 ≤ c.lastChapterSeek)
