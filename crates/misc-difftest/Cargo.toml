@@ -1,0 +1,63 @@
+[package]
+name = "rmpv-misc-difftest"
+description = "Differential tests of the rmpv-misc port against mpv's compiled C"
+keywords = ["mpv", "testing"]
+categories = ["development-tools::testing"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+# The library only declares and wraps mpv's C functions. They are linked into
+# the integration tests alone, so a unit-test or doc-test binary would not link.
+test = false
+doctest = false
+
+[dependencies]
+rmpv-misc = { version = "0.1.0", path = "../misc" }
+
+# The workspace lint table with `unsafe_code` allowed: calling C needs it.
+# README.md says what else differs and why.
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+unused_crate_dependencies = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
+missing_const_for_fn = "allow"
+redundant_pub_crate = "allow"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+dbg_macro = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+
+# Relaxed for this crate: it is test code throughout, and a failed
+# expectation should stop the test.
+expect_used = "allow"
+indexing_slicing = "allow"
+panic = "allow"
+unwrap_used = "allow"
+cast_lossless = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+# The `c!` macro evaluates its arguments inside its `unsafe` block, so that one
+# safety argument covers every C call the tests make.
+macro_metavars_in_unsafe = "allow"

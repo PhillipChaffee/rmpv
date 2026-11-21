@@ -1,4 +1,4 @@
-.PHONY: setup fmt lint test mpv mpv-build proofs cover ci
+.PHONY: setup fmt lint test mpv mpv-build proofs cover difftest ci
 
 MPV := formal/.mpv
 # Only the top-level keys; later tables such as [libplacebo] have their own.
@@ -48,4 +48,10 @@ proofs: mpv-build
 cover: mpv-build
 	cargo run -q --release --locked -p mpv-cover -- report
 
-ci: lint test proofs
+# Run the Rust port of mpv's misc/ folder and mpv's compiled C on the same
+# generated inputs. `make test` runs these too when the mpv build exists; this
+# target builds it first and fails without it.
+difftest: mpv-build
+	RMPV_REQUIRE_MPV_BUILD=1 cargo test --release --locked -p rmpv-misc-difftest -- --show-output
+
+ci: lint test proofs difftest

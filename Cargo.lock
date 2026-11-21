@@ -359,6 +359,13 @@ name = "rmpv-misc"
 version = "0.1.0"
 
 [[package]]
+name = "rmpv-misc-difftest"
+version = "0.1.0"
+dependencies = [
+ "rmpv-misc",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
