@@ -7,8 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const SHIMS: [&str; 9] = [
+const SHIMS: [&str; 10] = [
     "inline_shim",
+    "thread_shim",
     "interpose",
     "static_bstr",
     "static_charset_conv",

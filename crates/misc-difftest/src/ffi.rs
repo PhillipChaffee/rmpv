@@ -255,6 +255,13 @@ unsafe extern "C" {
     pub fn close(fd: c_int) -> c_int;
     pub fn __errno_location() -> *mut c_int;
 
+    // misc/thread_tools.c and misc/rendezvous.c
+    pub fn dt_waiter_new() -> *mut c_void;
+    pub fn mp_waiter_wait(waiter: *mut c_void) -> usize;
+    pub fn mp_waiter_wakeup(waiter: *mut c_void, value: usize);
+    pub fn mp_waiter_poll(waiter: *mut c_void) -> bool;
+    pub fn mp_rendezvous(tag: *mut c_void, value: isize) -> isize;
+
     // misc/charset_conv.c
     pub fn mp_charset_is_utf8(user_cp: *const c_char) -> bool;
     pub fn mp_charset_is_utf16(user_cp: *const c_char) -> bool;

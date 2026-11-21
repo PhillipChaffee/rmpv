@@ -10,6 +10,7 @@ mod bstr;
 mod clib;
 mod fs;
 mod small;
+mod threads;
 mod tree;
 
 use rmpv_misc_difftest::input::Rng;
