@@ -1,0 +1,18 @@
+name = "misc"
+defaultTargets = ["MiscLoops", "MiscRec"]
+
+# The Aeneas release that produced the files: its Lean library must match.
+# This is the copy the pilot used; change the path for another machine.
+[[require]]
+name = "aeneas"
+path = "/home/user/spike-aeneas/dist/backends/lean"
+
+# Generated code must not bind an unknown name (such as F64) as an implicit
+# variable, which is what Lean does by default.
+[[lean_lib]]
+name = "MiscLoops"
+leanOptions = { autoImplicit = false, relaxedAutoImplicit = false }
+
+[[lean_lib]]
+name = "MiscRec"
+leanOptions = { autoImplicit = false, relaxedAutoImplicit = false }
