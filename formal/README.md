@@ -183,6 +183,18 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
   `X`, and `check` refuses `paths=all` for it, so a claim must list its paths.
 - Lua, JavaScript, Objective-C, and Swift sources are not parsed.
 
+## Known mpv defects and avoided inputs
+
+This is the one list of inputs on which mpv misbehaves, or on which the model
+says nothing. A coverage figure carries these caveats even at 100%. Each was
+found by reading the C source. None has been reproduced by running mpv.
+
+| Function | Input or state | What mpv does | In the model | Stated at |
+| --- | --- | --- | --- | --- |
+| `playlist_unshuffle` with `cmp_unshuffle` (`common/playlist.c`) | An entry with `original_index` -1 sits after an entry with a known index: shuffle, append, then unshuffle. | The comparison is not a consistent total order, so the result of `qsort` is undefined. | Avoided: the generator does not unshuffle such a playlist, and the theorems assume a consistent order. | Doc comment on `unshuffle` in `Mpv/Common/Playlist.lean`. |
+| `playlist_get_first_in_next_playlist` (`common/playlist.c`) | No current entry, as after a playlist has ended and `playlist-prev-playlist` is issued, unless `playlist_get_next` returns NULL, or `direction > 0` and the entry it returns has no playlist path. | Reads `pl->current->playlist_path`: a NULL dereference. | Avoided: the generator does not produce that state, and the model describes mpv only outside it. | Doc comment on `getFirstInNextPlaylist` in `Mpv/Common/Playlist.lean`. |
+| `get_current_chapter` (`player/playloop.c`) | `last_chapter_seek` at or above `num_chapters`: a seek to chapter 4, then a `chapter-list` change or a demuxer chapter update that leaves 2 chapters. Neither resets the field. | Returns 4, an index at or above `get_chapter_count`, until a seek of another kind or a new file. Possibly a bug in mpv. | Modelled as is: the model returns the same value and the generator produces the state. | Doc comment on `getCurrentChapter_bounds` in `Mpv/Player/PlayloopTheorems.lean`; `getCurrentChapter_lt_count_iff` is the unconditional fact. |
+
 ## Modelling conventions
 
 - A C `int` is a Lean `Int`, so overflow is out of the model.

@@ -150,10 +150,26 @@ theorem getCurrentChapter_from_position (c : Ctx) (some_chapters : c.chapters.si
   rw [result]
   omega
 
-/-- The result is at least -2 and less than the chapter count. mpv stores in
-`last_chapter_seek` only -2 or a chapter that `chapter_start_time` accepted;
-the hypotheses say so, because the function returns the stored value as it is
-while a seek is pending. -/
+/-- With chapters, the result is below the chapter count exactly when
+`last_chapter_seek` is. This needs no assumption about that field. -/
+theorem getCurrentChapter_lt_count_iff (c : Ctx) (some_chapters : c.chapters.size ≠ 0) :
+    getCurrentChapter c < getChapterCount c ↔ c.lastChapterSeek < c.chapters.size := by
+  have := chaptersStarted_le_size c (getCurrentTime c)
+  simp only [getCurrentChapter, getChapterCount, some_chapters, ↓reduceIte]
+  split <;> omega
+
+/-- The result is at least -2 and less than the chapter count, provided
+`last_chapter_seek` is. The hypotheses are not an invariant of mpv. `high`
+holds from the start of a file (the field is -2) and still holds right after a
+chapter seek (command.c stores only a chapter `chapter_start_time` accepted).
+It can fail later: the seek clears `last_chapter_flag` but leaves
+`last_chapter_seek`, and both a runtime `chapter-list` change and a demuxer
+chapter update replace the chapter list without resetting the field. After a
+seek to chapter 4, a new list of 2 chapters makes `get_current_chapter` return
+4, at or above the count, until a seek of another kind or a new file resets the
+field. `getCurrentChapter_lt_count_iff` is the fact that holds without the
+hypotheses, and `getCurrentChapter_from_position` gives the lower bound -1
+when no seek is pending. -/
 theorem getCurrentChapter_bounds (c : Ctx) (low : -2 ≤ c.lastChapterSeek)
     (high : c.lastChapterSeek < c.chapters.size) :
     -2 ≤ getCurrentChapter c ∧ getCurrentChapter c < getChapterCount c := by
