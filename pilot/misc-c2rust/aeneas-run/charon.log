@@ -1,0 +1,206 @@
+   Compiling misc_c2rust v0.0.0 (/tmp/claude-0/-home-user/00acc159-06ff-5304-b020-3c2e71b0bdcd/scratchpad/c2r-port)
+warning: the feature `core_intrinsics` is internal to the compiler or standard library
+ --> lib.rs:8:12
+  |
+8 | #![feature(core_intrinsics)]
+  |            ^^^^^^^^^^^^^^^
+  |
+  = note: using it is strongly discouraged
+  = note: `#[warn(internal_features)]` on by default
+
+warning: the feature `c_variadic` has been stable since 1.99.0 and no longer requires an attribute to enable
+ --> lib.rs:7:12
+  |
+7 | #![feature(c_variadic)]
+  |            ^^^^^^^^^^
+  |
+  = note: `#[warn(stable_features)]` on by default
+
+warning: the feature `raw_ref_op` has been stable since 1.82.0 and no longer requires an attribute to enable
+  --> lib.rs:10:12
+   |
+10 | #![feature(raw_ref_op)]
+   |            ^^^^^^^^^^
+
+warning: unreachable statement
+   --> src/node.rs:511:5
+    |
+510 |     abort();
+    |     ------- any code following this expression is unreachable
+511 |     panic!("Reached end of non-void function without returning");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `talloc_ctx`
+   --> src/charset_conv.rs:120:5
+    |
+120 |     mut talloc_ctx: *mut ::core::ffi::c_void,
+    |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_talloc_ctx`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `log`
+   --> src/charset_conv.rs:193:5
+    |
+193 |     mut log: *mut mp_log,
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_log`
+
+warning: unused variable: `cp`
+   --> src/charset_conv.rs:195:5
+    |
+195 |     mut cp: *const ::core::ffi::c_char,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_cp`
+
+warning: references are not nullable, so checking them for null will always return false
+   --> src/thread_pool.rs:504:12
+    |
+504 |         if (b"unreachable\0" as *const u8 as *const ::core::ffi::c_char).is_null() {
+    |            ^----------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |             |
+    |             expression has type `&[u8; 12]`
+    |
+    = note: `#[warn(useless_ptr_null_checks)]` on by default
+
+warning: references are not nullable, so checking them for null will always return false
+   --> src/node.rs:500:8
+    |
+500 |     if (b"unreachable\0" as *const u8 as *const ::core::ffi::c_char).is_null() {
+    |        ^----------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         expression has type `&[u8; 12]`
+
+warning: function pointer comparisons do not produce meaningful results since their addresses are not guaranteed to be unique
+   --> src/dispatch.rs:485:20
+    |
+485 |                 && (*cur).fn_0 == (*item).fn_0
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: the address of the same function can vary between different codegen units
+    = note: furthermore, different functions could have the same address after being merged together
+    = note: for more information visit <https://doc.rust-lang.org/nightly/core/ptr/fn.fn_addr_eq.html>
+    = note: `#[warn(unpredictable_function_pointer_comparisons)]` on by default
+
+warning: function pointer comparisons do not produce meaningful results since their addresses are not guaranteed to be unique
+   --> src/dispatch.rs:596:12
+    |
+596 |         if (*cur).fn_0 == fn_0 && (*cur).fn_data == fn_data {
+    |            ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: the address of the same function can vary between different codegen units
+    = note: furthermore, different functions could have the same address after being merged together
+    = note: for more information visit <https://doc.rust-lang.org/nightly/core/ptr/fn.fn_addr_eq.html>
+
+
+thread 'main' (23077) panicked at src/transform/control_flow/ullbc_to_llbc.rs:1144:9:
+stack depth limit exceeded
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+   3: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+   4: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+   5: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+   6: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+   7: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+   8: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+   9: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  10: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  11: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  12: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  13: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  14: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  15: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  16: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  17: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  18: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  19: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  20: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  21: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  22: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  23: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  24: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  25: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  26: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  27: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  28: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  29: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  30: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  31: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  32: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  33: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  34: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  35: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  36: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  37: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  38: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  39: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  40: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  41: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  42: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  43: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  44: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  45: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  46: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  47: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  48: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  49: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  50: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  51: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  52: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  53: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  54: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  55: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  56: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  57: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  58: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  59: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  60: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  61: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  62: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  63: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  64: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  65: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  66: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  67: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  68: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  69: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  70: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  71: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  72: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  73: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  74: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  75: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  76: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  77: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  78: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  79: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  80: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  81: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  82: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  83: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  84: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  85: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  86: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  87: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  88: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+  89: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block
+  90: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_jump
+  91: <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block_inner
+  92: charon_lib::utils::try_ensure_sufficient_stack::<charon_lib::ast::bodies::structured::Block, <charon_lib::transform::control_flow::ullbc_to_llbc::ReconstructCtx>::translate_block::{closure#0}>
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+warning: Thread panicked while transforming item `Fun(144)`.
+    --> src/language.rs:411:1
+     |
+ 411 | / unsafe extern "C" fn run_static_initializers() {
+ 412 | |     langmap = [
+ 413 | |         lang {
+ 414 | |             match_0: C2RustUnnamed_0 {
+...    |
+2885 | |     ];
+2886 | | }
+     | |_^
+
+warning: The extraction generated 1 warnings
+warning: `misc_c2rust` (lib) generated 11 warnings (run `cargo fix --lib -p misc_c2rust` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.66s

@@ -1,6 +1,7 @@
 [files]
 # The language table of the port is copied from mpv and holds ISO 639 codes.
-extend-exclude = ["Cargo.lock", "crates/misc/src/language_tables.rs"]
+# c2rust output keeps mpv's identifiers; it is a measurement copy, not edited.
+extend-exclude = ["Cargo.lock", "crates/misc/src/language_tables.rs", "pilot/misc-c2rust/src"]
 
 [default]
 extend-ignore-re = [
