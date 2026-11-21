@@ -14,7 +14,11 @@ env:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    # formal/build-mpv.sh and formal/README.md name Ubuntu 24.04 packages.
+    runs-on: ubuntu-24.04
+    # Nothing is cached but Rust: every run builds libplacebo and mpv from
+    # source, then compiles and runs one harness per planted bug.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
