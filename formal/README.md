@@ -200,15 +200,45 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 
 This is the one list of inputs on which mpv misbehaves, or on which the model
 says nothing. A coverage figure carries these caveats even at 100%. Each was
-found by reading the C source. None has been reproduced by running mpv.
+found by reading the C source. None has been reproduced by running mpv. The
+list has three parts: defects in mpv, preconditions that mpv's callers keep,
+and inputs the fidelity check never tries.
+
+### mpv defects
+
+Inputs that mpv can meet and on which it misbehaves.
 
 | Function | Input or state | What mpv does | In the model | Stated at |
 | --- | --- | --- | --- | --- |
 | `playlist_unshuffle` with `cmp_unshuffle` (`common/playlist.c`) | An entry with `original_index` -1 sits after an entry with a known index: shuffle, append, then unshuffle. | The comparison is not a consistent total order, so the result of `qsort` is undefined. | Avoided: the generator does not unshuffle such a playlist. No theorem assumes the comparison is consistent; each states what it needs of `qsort`'s output as a hypothesis. `unshuffle_entries` needs nothing. `unshuffle_perm` and `unshuffle_wf` need only that the output is a permutation of the input. `unshuffle_shuffle_entries` and `unshuffle_shuffle` also need the output to be in order by `cmp_unshuffle`, on a playlist that was just shuffled, where every entry has a known index. | Doc comment on `unshuffle` in `Mpv/Common/Playlist.lean`. |
 | `playlist_get_first_in_next_playlist` (`common/playlist.c`) | No current entry, as after a playlist has ended and `playlist-prev-playlist` is issued, unless `playlist_get_next` returns NULL, or `direction > 0` and the entry it returns has no playlist path. | Reads `pl->current->playlist_path`: a NULL dereference. | Avoided: the generator does not produce that state, and the model describes mpv only outside it. | Doc comment on `getFirstInNextPlaylist` in `Mpv/Common/Playlist.lean`. |
-| `calculate_frame_duration` (`player/video.c`) | `vo_chain` is `NULL`. | Reads `vo_chain->filter` without a test. Its one caller, `write_video`, returns on entry when `vo_chain` is `NULL`; whether the field can change between that test and the call was not traced. | Avoided: the generator sets `vo_chain` first. The model returns the state unchanged, which describes nothing mpv does. | Doc comment on `calculateFrameDuration` in `Mpv/Player/Video.lean`. |
-| `adjust_audio_drift_compensation` (`player/video.c`) | `video_out` is `NULL`. | Reads `video_out->opts` without a test. | Out of the model: `video_sync` is a plain field of the model's context, and the harness always has a `vo`. | Doc comment on `adjustAudioDriftCompensation` in `Mpv/Player/Video.lean`. |
 | `get_current_chapter` (`player/playloop.c`) | `last_chapter_seek` at or above `num_chapters`: a seek to chapter 4, then a `chapter-list` change or a demuxer chapter update that leaves 2 chapters. Neither resets the field. | Returns 4, an index at or above `get_chapter_count`, until a seek of another kind or a new file resets the field, or a new chapter seek overwrites it with a valid chapter. Possibly a bug in mpv. | Modelled as is: the model returns the same value and the generator produces the state. | Doc comment on `getCurrentChapter_bounds` in `Mpv/Player/PlayloopTheorems.lean`; `getCurrentChapter_lt_count_iff` is the unconditional fact. |
+
+### Preconditions no caller breaks
+
+These functions read a pointer without testing it, but their one caller cannot
+reach the call with that pointer `NULL`. They are not defects. The model still
+describes mpv only while the precondition holds, and the generator keeps it.
+
+| Function | Precondition | Why it holds in mpv | In the model | Stated at |
+| --- | --- | --- | --- | --- |
+| `calculate_frame_duration` (`player/video.c`) | `vo_chain` is not `NULL`; the function reads `vo_chain->filter` without a test. | Its one caller, `write_video`, returns at `video.c:1112` when `vo_chain` is `NULL`, before the call at `video.c:1314`. Only `uninit_video_chain` sets the field to `NULL`, and between those two lines `write_video` calls it only on a path that returns. The functions `write_video` calls on the way (`video_output_image`, `apply_video_crop`, `update_avsync_before_frame`, `update_subtitles`, `mp_notify`) do not call it themselves; what they call in turn was not followed. | The generator sets `vo_chain` first. For `none` the model returns the state unchanged, which describes nothing mpv does. | Doc comment on `calculateFrameDuration` in `Mpv/Player/Video.lean`. |
+| `adjust_audio_drift_compensation` (`player/video.c`) | `video_out` is not `NULL`; the function reads `video_out->opts` without a test. | Its one caller, `handle_display_sync_frame`, reads `video_out->opts->video_sync` itself at `video.c:863`, before anything else and before the call at `video.c:973`, and nothing it calls in between assigns `video_out`. | Out of the model: `video_sync` is a plain field of the model's context, and the harness always has a `vo`. | Doc comment on `adjustAudioDriftCompensation` in `Mpv/Player/Video.lean`. |
+
+### Inputs the fidelity check never tries
+
+The generators do not produce these, so "checked" says nothing about them. For
+a callee the model takes as a parameter, the oracle's stand-in is right only
+for the inputs listed.
+
+| Function | What is tried | What is never tried |
+| --- | --- | --- |
+| `playlist_entry_new`, and `playlist_append_file`, which calls it (`common/playlist.c`) | Twelve fixed filenames: five absolute paths, some with `.` components and repeated or trailing `/`; `-`; `http://h/x`; and five `file://` URLs with ASCII `%` escapes, an upper-case scheme, a malformed escape and a cut-off one. | A relative path, which `mp_normalize_path` joins to the working directory. A path with a `..` component, for which it resolves symbolic links on the filesystem. An empty filename. A URL with a non-ASCII character or an escape of a byte above `7F`. The stand-ins in `Oracle/Playlist.lean` are wrong or untested there: `normalizePath` is `mp_normalize_path` only for an absolute path without `..`, a URL, or `-`; `fileUrlToFilename`, with `splitProto` for `mp_split_proto`, is `mp_file_url_to_filename` only for ASCII URLs, because it decodes an escape to a character, not to a byte. |
+| `playlist_parse_file` (`common/playlist.c`) | Two playlist files, `/lists/one` and `~/two`, with `HOME` set to `/home/u`. | Any other use of `~`. The stand-in `getUserPath` is `mp_get_user_path` only for a path that starts with `~/` while `HOME` is set, or that does not start with `~`: not for `~~/`, `~~home/` and the other `~~name/` forms, which mpv looks up in its configuration directories. |
+| `playlist_get_first_in_next_playlist`, `playlist_get_first_in_same_playlist` (`common/playlist.c`) | Eight fixed playlist paths, two with a trailing `/`, and no path. | The stand-in `stripTrailingSeparator` is `mp_path_strip_trailing_separator` only where `/` is the one path separator, as in this build. It is not on Windows. |
+| Every `common/playlist.c` function | Playlists of at most 9 entries, a second playlist of at most 4, and at most one entry at a time that the harness holds references on, at most two of them. | Longer playlists, and references held on two entries at once. |
+| The chapter functions of `player/playloop.c` | At most 5 chapters. | More chapters. |
+| The frame-history functions of `player/video.c` | At most 24 past frames and 3 next frames. | A longer history. mpv keeps up to 100 past frames (`MAX_NUM_VO_PTS`) and 11 next frames. |
 
 ## Modelling conventions
 

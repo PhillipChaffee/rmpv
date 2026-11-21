@@ -213,7 +213,8 @@ difference is low-pass filtered and the compensation moves, at a limited rate,
 towards the value that lets the filtered difference decay.
 
 C reads `video_out->opts` without a test, so the model describes mpv only
-while `video_out` is not `NULL`. -/
+while `video_out` is not `NULL`. Its one caller, `handle_display_sync_frame`,
+reads the same field first, so it cannot make the call with `NULL`. -/
 -- mpv-cover: player/video.c adjust_audio_drift_compensation paths=all hash=4bf2a35e76f8
 def adjustAudioDriftCompensation (c : Ctx) (duration : Float) : Ctx :=
   if (c.videoSync ≠ vsDispResample ∧ c.videoSync ≠ vsDispTempo) ∨
@@ -255,7 +256,8 @@ or the container's frame time when that fits them.
 
 C asserts `num_past_frames >= 1 && num_next_frames >= 1` and reads
 `vo_chain->filter` without a test, so the model describes mpv only while both
-arrays are non-empty and `vo_chain` is not `NULL`. -/
+arrays are non-empty and `vo_chain` is not `NULL`. Its one caller,
+`write_video`, returns on entry when `vo_chain` is `NULL`. -/
 -- mpv-cover: player/video.c calculate_frame_duration paths=all unobservable=20,21,22,23 hash=183893b1e7ad
 def calculateFrameDuration (c : Ctx) : Ctx :=
   match c.voChain with
