@@ -9,7 +9,7 @@ real code.
 | --- | --- |
 | `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c`. In `Mpv/Player/`, `Playloop.lean`, `Audio.lean` and `Video.lean` mirror parts of `player/playloop.c`, `player/audio.c` and `player/video.c`. Each has a `…Theorems.lean` with its proofs. |
 | `mpv.lock.toml` | The mpv commit the model describes. |
-| `scope.toml` | mpv files left out on purpose, each with a reason. |
+| `scope.toml` | mpv files left out on purpose, each with a reason. Today that is only mpv's own tests and fuzzers: all other mpv code, on every platform, is in scope. |
 | `cover/` | The `mpv-cover` tool. |
 | `fidelity/` | The `mpv-fidelity` tool and one folder per checked target. |
 | `Oracle/` | Executable wrappers that run the model on a script of operations. |
