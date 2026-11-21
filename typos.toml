@@ -3,3 +3,7 @@ extend-exclude = ["Cargo.lock"]
 
 [default]
 extend-ignore-re = ["hash=[0-9a-f]{12}"]
+
+[default.extend-words]
+# mpv file name prefix (ambient light sensor).
+als = "als"

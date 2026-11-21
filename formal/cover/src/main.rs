@@ -90,6 +90,8 @@ struct Analysis {
     excluded: Vec<(String, String, usize)>,
     untracked_lines: BTreeMap<&'static str, usize>,
     problems: Vec<String>,
+    /// File and function pairs with a planted-bug check in `fidelity/targets`.
+    checked: BTreeSet<(String, String)>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -98,22 +100,29 @@ struct Tally {
     functions_covered: usize,
     paths: usize,
     paths_covered: usize,
+    /// Covered paths in functions the fidelity check runs against real mpv.
+    paths_checked: usize,
 }
 
 impl Tally {
-    fn add(&mut self, function: &Function, covered: usize) {
+    fn add(&mut self, function: &Function, covered: usize, checked: bool) {
         self.functions += 1;
         self.functions_covered += usize::from(covered == function.arms.len());
         self.paths += function.arms.len();
         self.paths_covered += covered;
+        self.paths_checked += if checked { covered } else { 0 };
     }
 
     fn row(&self, label: &str) -> String {
         #[expect(clippy::cast_precision_loss, reason = "path counts are far below 2^52")]
         let percent = 100.0 * self.paths_covered as f64 / self.paths.max(1) as f64;
         format!(
-            "{label:<12} {:>6} / {:<6} {:>7} / {:<7} {percent:>7.3}%\n",
-            self.functions_covered, self.functions, self.paths_covered, self.paths
+            "{label:<12} {:>6} / {:<6} {:>7} / {:<7} {percent:>7.3}% {:>8}\n",
+            self.functions_covered,
+            self.functions,
+            self.paths_covered,
+            self.paths,
+            self.paths_checked
         )
     }
 }
@@ -182,6 +191,7 @@ impl Analysis {
             }
         }
 
+        analysis.checked = checked_functions(formal)?;
         let scan = claims::scan(formal)?;
         analysis.problems = scan.problems;
         for claim in scan.claims {
@@ -240,11 +250,17 @@ impl Analysis {
             .unwrap_or_default()
     }
 
+    fn is_checked(&self, file: &str, function: &Function) -> bool {
+        self.checked
+            .contains(&(file.to_owned(), function.name.clone()))
+    }
+
     fn total(&self) -> Tally {
         let mut total = Tally::default();
         for file in &self.files {
             for function in &file.functions {
-                total.add(function, self.covered_paths(&file.path, function).len());
+                let covered = self.covered_paths(&file.path, function).len();
+                total.add(function, covered, self.is_checked(&file.path, function));
             }
         }
         total
@@ -259,15 +275,16 @@ impl Analysis {
                 .map_or(".", |(directory, _)| directory);
             let tally = by_directory.entry(directory).or_default();
             for function in &file.functions {
-                tally.add(function, self.covered_paths(&file.path, function).len());
+                let covered = self.covered_paths(&file.path, function).len();
+                tally.add(function, covered, self.is_checked(&file.path, function));
             }
         }
 
         let mut out = format!("mpv @ {}\n\n", self.commit);
         let _ = writeln!(
             out,
-            "{:<12} {:>15} {:>17} {:>8}",
-            "directory", "functions", "paths", "covered"
+            "{:<12} {:>15} {:>17} {:>8} {:>8}",
+            "directory", "functions", "paths", "covered", "checked"
         );
         for (directory, tally) in &by_directory {
             out.push_str(&tally.row(directory));
@@ -339,7 +356,12 @@ impl Analysis {
                     Some(coverage) => {
                         let names: Vec<&str> =
                             coverage.declarations.iter().map(String::as_str).collect();
-                        format!("modelled by {}", names.join(", "))
+                        let checked = if self.is_checked(&file.path, function) {
+                            ", checked against mpv"
+                        } else {
+                            ""
+                        };
+                        format!("modelled by {}{checked}", names.join(", "))
                     }
                     None => "not modelled".to_owned(),
                 };
@@ -392,6 +414,39 @@ impl Analysis {
         }
         Ok(out)
     }
+}
+
+/// A fidelity target: mpv-fidelity runs these functions against the model and
+/// proves the comparison is sensitive by planting a bug in each.
+#[derive(Debug, Deserialize)]
+struct FidelityTarget {
+    file: String,
+    mutation: Vec<PlantedBug>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlantedBug {
+    function: String,
+}
+
+fn checked_functions(formal: &Path) -> Result<BTreeSet<(String, String)>> {
+    let mut checked = BTreeSet::new();
+    let Ok(targets) = fs::read_dir(formal.join("fidelity/targets")) else {
+        return Ok(checked);
+    };
+    for target in targets {
+        let manifest = target?.path().join("target.toml");
+        if manifest.exists() {
+            let target: FidelityTarget = read_toml(&manifest)?;
+            checked.extend(
+                target
+                    .mutation
+                    .into_iter()
+                    .map(|bug| (target.file.clone(), bug.function)),
+            );
+        }
+    }
+    Ok(checked)
 }
 
 fn read_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {

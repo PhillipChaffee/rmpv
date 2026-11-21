@@ -1,0 +1,85 @@
+# Differential check of Mpv/Common/Playlist.lean against mpv's common/playlist.c.
+
+oracle = "playlist-oracle"
+# mpv sources linked into the harness besides the file under test.
+sources = ["ta/ta.c", "ta/ta_talloc.c", "ta/ta_utils.c"]
+# The file the harness includes and the mutations edit.
+file = "common/playlist.c"
+
+# Each mutation plants one bug in a copy of the file. The check must notice
+# every one. A function counts as checked only if it has a mutation here.
+
+[[mutation]]
+function = "playlist_update_indexes"
+find = "start = MPMAX(start, 0);"
+replace = "start = MPMAX(start, 1);"
+
+[[mutation]]
+function = "playlist_update_indexes"
+find = "pl->entries[n]->pl_index = n;"
+replace = "pl->entries[n]->pl_index = n + 1;"
+
+[[mutation]]
+function = "playlist_insert_at"
+find = "add->id = ++pl->id_alloc;"
+replace = "add->id = pl->id_alloc++;"
+
+[[mutation]]
+function = "playlist_insert_at"
+find = "playlist_update_indexes(pl, index, pl->num_entries);"
+replace = "playlist_update_indexes(pl, index, index + 1);"
+
+[[mutation]]
+function = "playlist_remove"
+find = "pl->current = playlist_entry_get_rel(entry, 1);"
+replace = "pl->current = playlist_entry_get_rel(entry, -1);"
+
+[[mutation]]
+function = "playlist_remove"
+find = "pl->current_was_replaced = true;"
+replace = "pl->current_was_replaced = false;"
+
+[[mutation]]
+function = "playlist_remove"
+find = "playlist_update_indexes(pl, entry->pl_index, -1);"
+replace = "playlist_update_indexes(pl, entry->pl_index + 1, -1);"
+
+[[mutation]]
+function = "playlist_get_next"
+find = "pl->playlist_completed && direction < 0"
+replace = "pl->playlist_completed && direction > 0"
+
+[[mutation]]
+function = "playlist_get_next"
+find = "return pl->current_was_replaced ? pl->current :"
+replace = "return !pl->current_was_replaced ? pl->current :"
+
+[[mutation]]
+function = "playlist_entry_get_rel"
+find = "e->pl_index + direction"
+replace = "e->pl_index - direction"
+
+[[mutation]]
+function = "playlist_entry_from_index"
+find = "return index >= 0 && index"
+replace = "return index > 0 && index"
+
+[[mutation]]
+function = "playlist_entry_to_index"
+find = "if (!e || e->pl != pl)"
+replace = "if (!e)"
+
+[[mutation]]
+function = "playlist_get_first"
+find = "return pl->num_entries ? pl->entries[0] : NULL;"
+replace = "return pl->num_entries ? pl->entries[pl->num_entries - 1] : NULL;"
+
+[[mutation]]
+function = "playlist_get_last"
+find = "? pl->entries[pl->num_entries - 1] : NULL;"
+replace = "? pl->entries[0] : NULL;"
+
+[[mutation]]
+function = "playlist_entry_count"
+find = "return pl->num_entries;"
+replace = "return pl->num_entries + 1;"

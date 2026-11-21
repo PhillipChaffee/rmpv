@@ -8,3 +8,43 @@ reason = "mpv's own unit tests, not player behaviour"
 [[exclude]]
 glob = "fuzzers/**"
 reason = "fuzzing harnesses, not player behaviour"
+
+[[exclude]]
+glob = "video/out/{gpu,gpu_next,opengl,vulkan,d3d11,placebo,hwdec,wldmabuf}/**"
+reason = "GPU renderers and their hardware interop; rmpv renders through wgpu"
+
+[[exclude]]
+glob = "video/out/vo_*.c"
+reason = "video output drivers; rmpv has one wgpu output. The driver-independent core, vo.c, stays in scope"
+
+[[exclude]]
+glob = "video/out/{win32,mac}/**"
+reason = "Windows and macOS window backends; rmpv windows through winit"
+
+[[exclude]]
+glob = "video/out/{x11_common,wayland_common,w32_common,android_common,drm_atomic,drm_common,drm_prime,present_sync,terminal_swapchain}.{c,h}"
+reason = "platform window and display backends; rmpv windows through winit"
+
+[[exclude]]
+glob = "video/{cuda,d3d,drmprime,vaapi,vdpau,vdpau_mixer,hwdec}.{c,h}"
+reason = "hardware decode device interop; FFmpeg owns this in rmpv"
+
+[[exclude]]
+glob = "video/filter/vf_{amf,d3d11vpp,gpu,gpu_egl,gpu_vulkan,vavpp,vdpaupp}.{c,h}"
+reason = "GPU and hardware video filters"
+
+[[exclude]]
+glob = "audio/out/ao_*"
+reason = "audio output drivers; rmpv outputs through cpal. The driver-independent core, ao.c and buffer.c, stays in scope"
+
+[[exclude]]
+glob = "osdep/{win32,mac,android}/**"
+reason = "Windows, macOS and Android platform layers; Linux is the reference platform"
+
+[[exclude]]
+glob = "osdep/{*-win,*-win32,*-mac,*-darwin,*-uwp,w32_*,windows_utils,win32-console-wrapper,als-*}.{c,h}"
+reason = "Windows, macOS and sensor platform code; Linux is the reference platform"
+
+[[exclude]]
+glob = "input/ipc-win.c"
+reason = "Windows IPC transport; Linux is the reference platform"

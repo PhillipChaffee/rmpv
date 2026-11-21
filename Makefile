@@ -32,10 +32,12 @@ mpv: $(MPV)/.git
 	git -C $(MPV) fetch -q --depth 1 $(MPV_REPO) $(MPV_COMMIT)
 	git -C $(MPV) checkout -q --detach FETCH_HEAD
 
-# Kernel-check every proof, then reject invalid or stale coverage claims.
+# Kernel-check every proof, reject invalid or stale coverage claims, then run
+# the model against real mpv code and confirm planted bugs are caught.
 proofs: mpv
 	cd formal && lake build --wfail
 	cargo run -q --release --locked -p mpv-cover -- check
+	cargo run -q --release --locked -p mpv-fidelity
 
 cover: mpv
 	cargo run -q --release --locked -p mpv-cover -- report

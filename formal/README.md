@@ -1,8 +1,9 @@
 # Formal model of mpv
 
 This folder holds a Lean 4 model of mpv's behaviour, with machine-checked
-theorems about it, and `mpv-cover`, a tool that reports which mpv code paths
-the model accounts for.
+theorems about it, and two tools. `mpv-cover` reports which mpv code paths the
+model accounts for. `mpv-fidelity` checks that the model behaves like mpv's
+real code.
 
 | Path | Role |
 | --- | --- |
@@ -10,6 +11,8 @@ the model accounts for.
 | `mpv.lock.toml` | The mpv commit the model describes. |
 | `scope.toml` | mpv files left out on purpose, each with a reason. |
 | `cover/` | The `mpv-cover` tool. |
+| `fidelity/` | The `mpv-fidelity` tool and one folder per checked target. |
+| `Oracle/` | Executable wrappers that run the model on a script of operations. |
 
 ## Setup
 
@@ -21,7 +24,8 @@ make proofs
 ```
 
 That fetches mpv at the pinned commit into `formal/.mpv`, checks every proof
-with `lake build --wfail`, and validates every coverage claim.
+with `lake build --wfail`, validates every coverage claim, and runs the
+fidelity check. The fidelity check needs a C compiler and runs on Linux.
 
 ## Claiming coverage
 
@@ -59,12 +63,35 @@ a path the model does not account for.
 hash is stale, when it has no declaration, or when a Lean file contains
 `sorry`, `axiom`, or another way around the proof checker.
 
+## Checking the model against mpv
+
+`mpv-fidelity` compiles mpv's real source file into a small harness, feeds the
+harness and the Lean model the same random script of operations, and compares
+every result and every resulting state.
+
+It then plants bugs. Each `[[mutation]]` in a target's `target.toml` changes
+one line in a copy of the mpv source. The comparison must notice every one. A
+function counts as checked only if it has a planted bug, so "checked" means
+the comparison is known to be sensitive to that function.
+
+```bash
+cargo run -q --release -p mpv-fidelity
+cargo run -q --release -p mpv-fidelity -- --seed 7 --sequences 20000
+```
+
+A target is a folder in `fidelity/targets/` with a `harness.c`, a
+`target.toml`, stub headers for mpv dependencies the checked functions do not
+use, and a script generator in `fidelity/src/`.
+
 ## What coverage does and does not mean
 
 A covered path means a Lean declaration claims to model it and the claim is
-current. The tool does not check that the Lean definition behaves like the C
-code. That link is a human review today. The plan is to close it by running the
-Lean model and real mpv on the same inputs and comparing results.
+current. The `checked` column in `report` counts covered paths in functions
+that `mpv-fidelity` runs against real mpv.
+
+Checked is strong evidence, not proof. It is random testing, so an input the
+generator never produces can still hide a difference. The generator only
+produces inputs that satisfy mpv's own assertions.
 
 The path counts also miss some of mpv. `report` lists each gap with its size:
 

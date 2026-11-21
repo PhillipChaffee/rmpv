@@ -1,0 +1,21 @@
+[package]
+name = "mpv-fidelity"
+description = "Checks the Lean model against mpv's real code by running both on the same inputs"
+keywords = ["mpv", "formal", "differential"]
+categories = ["development-tools"]
+readme = "../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+[lints]
+workspace = true

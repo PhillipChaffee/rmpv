@@ -1,5 +1,12 @@
 name = "mpv"
-defaultTargets = ["Mpv"]
+defaultTargets = ["Mpv", "playlist-oracle"]
 
 [[lean_lib]]
 name = "Mpv"
+
+[[lean_lib]]
+name = "Oracle"
+
+[[lean_exe]]
+name = "playlist-oracle"
+root = "Oracle.Playlist"
