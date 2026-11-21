@@ -181,6 +181,11 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 ## Modelling conventions
 
 - A C `int` is a Lean `Int`, so overflow is out of the model.
-- Memory management (`talloc`, reference counts) and log output are not
-  modelled. Paths that only do these are marked `unobservable`.
+- Memory allocation (`talloc`) and log output are not modelled. Paths that only
+  do these are marked `unobservable`. A reference count that decides when an
+  object is freed is state: `playlist_entry_unref` returns `none` when it frees
+  the entry.
+- A callee in a file the model does not cover yet is a parameter of the
+  definition, as `mp_normalize_path` is for `entryNew`. The oracle supplies a
+  stand-in that is right for the inputs the generator emits.
 - `mp_assert` conditions become theorem hypotheses.

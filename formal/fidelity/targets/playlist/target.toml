@@ -81,3 +81,163 @@ replace = "? pl->entries[0] : NULL;"
 function = "playlist_entry_count"
 find = "return pl->num_entries;"
 replace = "return pl->num_entries + 1;"
+
+[[mutation]]
+function = "playlist_entry_new"
+find = "local_filename ? local_filename : filename"
+replace = "filename"
+
+[[mutation]]
+function = "playlist_entry_new"
+find = "e->stream_flags = STREAM_ORIGIN_DIRECT;"
+replace = "e->stream_flags = STREAM_ORIGIN_FS;"
+
+[[mutation]]
+function = "playlist_entry_new"
+find = "e->original_index = -1;"
+replace = "e->original_index = 0;"
+
+[[mutation]]
+function = "playlist_entry_add_param"
+find = "{bstrdup(e, name), bstrdup(e, value)}"
+replace = "{bstrdup(e, value), bstrdup(e, name)}"
+
+[[mutation]]
+function = "playlist_entry_add_params"
+find = "for (int n = 0; n < num_params; n++)"
+replace = "for (int n = 1; n < num_params; n++)"
+
+[[mutation]]
+function = "playlist_entry_add_params"
+find = "playlist_entry_add_param(e, params[n].name, params[n].value);"
+replace = "playlist_entry_add_param(e, params[0].name, params[0].value);"
+
+[[mutation]]
+function = "playlist_set_params"
+find = "pl->entries[n]->num_params = 0;"
+replace = ";"
+
+[[mutation]]
+function = "playlist_set_params"
+find = "playlist_entry_add_params(pl->entries[n], params, num_params);"
+replace = "playlist_entry_add_params(pl->entries[0], params, num_params);"
+
+[[mutation]]
+function = "playlist_entry_unref"
+find = "e->reserved--;"
+replace = "e->reserved -= 2;"
+
+[[mutation]]
+function = "playlist_entry_unref"
+find = "if (e->reserved < 0) {"
+replace = "if (e->reserved <= 0) {"
+
+[[mutation]]
+function = "playlist_clear"
+find = "for (int n = pl->num_entries - 1; n >= 0; n--)\n        playlist_remove(pl, pl->entries[n]);"
+replace = "for (int n = pl->num_entries - 1; n > 0; n--)\n        playlist_remove(pl, pl->entries[n]);"
+
+[[mutation]]
+function = "playlist_clear"
+find = "pl->current_was_replaced = false;"
+replace = "pl->current_was_replaced = true;"
+
+[[mutation]]
+function = "playlist_clear"
+find = "pl->playlist_completed = false;\n    pl->playlist_started = false;\n    TA_FREEP"
+replace = "pl->playlist_completed = true;\n    pl->playlist_started = false;\n    TA_FREEP"
+
+[[mutation]]
+function = "playlist_clear"
+find = "pl->playlist_started = false;\n    TA_FREEP"
+replace = "pl->playlist_started = true;\n    TA_FREEP"
+
+[[mutation]]
+function = "playlist_clear"
+find = "TA_FREEP(&pl->playlist_dir);"
+replace = ";"
+
+[[mutation]]
+function = "playlist_clear_except_current"
+find = "if (pl->entries[n] != pl->current)"
+replace = "if (pl->entries[n] == pl->current)"
+
+[[mutation]]
+function = "playlist_clear_except_current"
+find = "for (int n = pl->num_entries - 1; n >= 0; n--) {"
+replace = "for (int n = pl->num_entries - 1; n > 0; n--) {"
+
+[[mutation]]
+function = "playlist_clear_except_current"
+find = "pl->playlist_completed = false;\n    pl->playlist_started = false;\n}"
+replace = "pl->playlist_completed = true;\n    pl->playlist_started = false;\n}"
+
+[[mutation]]
+function = "playlist_clear_except_current"
+find = "pl->playlist_started = false;\n}"
+replace = "pl->playlist_started = true;\n}"
+
+[[mutation]]
+function = "playlist_move"
+find = "if (old_index >= index)"
+replace = "if (old_index <= index)"
+
+[[mutation]]
+function = "playlist_move"
+find = "MPMIN(index - 1, old_index - 1)"
+replace = "MPMAX(index - 1, old_index - 1)"
+
+[[mutation]]
+function = "playlist_move"
+find = "MPMAX(index + 1, old_index + 1)"
+replace = "MPMIN(index + 1, old_index + 1)"
+
+[[mutation]]
+function = "playlist_move"
+find = "MP_TARRAY_REMOVE_AT(pl->entries, pl->num_entries, old_index);"
+replace = "MP_TARRAY_REMOVE_AT(pl->entries, pl->num_entries, entry->pl_index);"
+
+[[mutation]]
+function = "playlist_append_file"
+find = "playlist_insert_at(pl, playlist_entry_new(filename), NULL);"
+replace = "playlist_insert_at(pl, playlist_entry_new(filename), playlist_get_first(pl));"
+
+[[mutation]]
+function = "playlist_populate_playlist_path"
+find = "for (int n = 0; n < pl->num_entries; n++) {\n        struct playlist_entry *e = pl->entries[n];"
+replace = "for (int n = 1; n < pl->num_entries; n++) {\n        struct playlist_entry *e = pl->entries[n];"
+
+[[mutation]]
+function = "playlist_populate_playlist_path"
+find = "e->playlist_path = playlist_path;"
+replace = "e->playlist_path = e->playlist_path ? e->playlist_path : playlist_path;"
+
+[[mutation]]
+function = "playlist_set_stream_flags"
+find = "pl->entries[n]->stream_flags = flags;"
+replace = "pl->entries[n]->stream_flags |= flags;"
+
+[[mutation]]
+function = "playlist_set_stream_flags"
+find = "for (int n = 0; n < pl->num_entries; n++)\n        pl->entries[n]->stream_flags"
+replace = "for (int n = 1; n < pl->num_entries; n++)\n        pl->entries[n]->stream_flags"
+
+[[mutation]]
+function = "playlist_set_current"
+find = "if (!pl->playlist_dir)"
+replace = "if (pl->playlist_dir)"
+
+[[mutation]]
+function = "playlist_set_current"
+find = "if (pl->entries[i]->playlist_path &&"
+replace = "if (!pl->entries[i]->playlist_path ||"
+
+[[mutation]]
+function = "playlist_set_current"
+find = "!strcmp(pl->entries[i]->filename, pl->entries[i]->playlist_path)) {"
+replace = "strcmp(pl->entries[i]->filename, pl->entries[i]->playlist_path)) {"
+
+[[mutation]]
+function = "playlist_set_current"
+find = "break;"
+replace = "continue;"
