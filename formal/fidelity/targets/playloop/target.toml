@@ -37,7 +37,7 @@ replace = "res += mpctx->demuxer->duration;"
 [[mutation]]
 function = "get_start_time"
 find = "res += mpctx->demuxer->start_time;"
-replace = "res = mpctx->demuxer->start_time;"
+replace = "res -= mpctx->demuxer->start_time;"
 
 [[mutation]]
 function = "get_current_time"
@@ -59,10 +59,12 @@ function = "get_playback_time"
 find = "if (length >= 0)"
 replace = "if (length > 0)"
 
+# `cur <= 0` would differ only in the sign of a zero, which is not compared, so
+# the boundary is probed one step above zero, at the smallest positive double.
 [[mutation]]
 function = "get_playback_time"
 find = "if (cur != MP_NOPTS_VALUE && cur < 0)"
-replace = "if (cur != MP_NOPTS_VALUE && cur <= 0)"
+replace = "if (cur != MP_NOPTS_VALUE && cur <= 0x1p-1074)"
 
 [[mutation]]
 function = "get_playback_time"

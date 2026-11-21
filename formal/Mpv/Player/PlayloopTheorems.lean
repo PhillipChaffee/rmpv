@@ -7,6 +7,9 @@ Lean gives `Float` no arithmetic laws: its operations are opaque to the proof
 checker, so nothing here says what a sum or a comparison of two times is. These
 theorems state the case structure instead: which branch a function takes, which
 of its inputs the result is, and the integer bounds on chapter indexes.
+
+A theorem that gives a result of `0` is about the model, whose zero is `+0.0`.
+Of mpv it claims a zero of either sign; see `Playloop.lean`.
 -/
 
 namespace Mpv.Player.Playloop
@@ -92,7 +95,7 @@ theorem getPlaybackTime_playing (c : Ctx) (playing : (c.playbackPts == nopts) = 
   · exact .inl rfl
   · exact .inr rfl
 
-/-- The result is exactly 0 or fails the C test for a known negative time. -/
+/-- The result is the model's 0 or fails the C test for a known negative time. -/
 theorem getPlaybackTime_not_negative (c : Ctx) :
     getPlaybackTime c = 0 ∨
       ¬ ((getPlaybackTime c != nopts) = true ∧ getPlaybackTime c < 0) := by

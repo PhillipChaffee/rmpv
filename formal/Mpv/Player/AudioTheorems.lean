@@ -6,6 +6,9 @@ Theorems about the gain and audio timestamp functions.
 `Float` and `Float32` operations are opaque to the proof checker, so nothing
 here says what a gain is as a number. These theorems state the case structure:
 which inputs a result depends on and which branch produces it.
+
+A theorem that gives a result of `0.0` is about the model, whose zero is `+0.0`.
+Of mpv it claims a zero of either sign; see `Playloop.lean`.
 -/
 
 namespace Mpv.Player.Audio

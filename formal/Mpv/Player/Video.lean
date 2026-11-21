@@ -34,7 +34,8 @@ def fmin (a b : Float) : Float := if a > b then b else a
 
 /-- The C library's `rint` in the default rounding mode: the nearest integer,
 ties to even, with the sign of the argument. Lean has no `rint`, so this is
-built from `floor`; the fidelity check compares it with libm's. -/
+built from `floor`; the fidelity check compares it with libm's, except for the
+sign of a zero result, which it compares nowhere. -/
 def rint (x : Float) : Float :=
   let below := x.floor
   let rest := x - below

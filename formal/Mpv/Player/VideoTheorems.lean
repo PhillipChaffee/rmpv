@@ -7,6 +7,9 @@ Theorems about the A/V sync arithmetic.
 drift or a speed is as a number. These theorems state the case structure: which
 branch runs, which fields a function writes, and the integer facts about the
 frame history.
+
+A theorem that gives a result or a field of `0` is about the model, whose zero
+is `+0.0`. Of mpv it claims a zero of either sign; see `Playloop.lean`.
 -/
 
 namespace Mpv.Player.Video

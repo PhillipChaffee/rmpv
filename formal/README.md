@@ -203,17 +203,27 @@ found by reading the C source. None has been reproduced by running mpv.
 
 - A C `int` is a Lean `Int`, so overflow is out of the model.
 - A C `double` is a Lean `Float`: both are IEEE-754 binary64. A definition
-  performs the C function's operations in the C function's order, and writes
-  `MPMAX` and `MPCLAMP` as the macros expand, because they are not symmetric
-  for NaN and signed zeros. `MP_NOPTS_VALUE` is the same bit pattern on both
-  sides, and the `playloop` script checks it against mpv's own.
-- The fidelity check compares floats exactly. A float crosses the script and
-  the output as the 16 hex digits of its bit pattern (`Float.toBits`), so both
-  sides start from the identical value and a difference in the last bit is a
-  divergence. There is no tolerance. The one exception is NaN: Lean's
-  `Float.ofBits` and `Float.toBits` keep a single NaN, so the harness prints
-  every NaN as `7ff8000000000000`. Whether a result is NaN is compared; the
-  sign and payload of a NaN are not.
+  performs the C function's operations in the C function's order, with IEEE
+  arithmetic as the C source reads, and writes `MPMAX` and `MPCLAMP` as the
+  macros expand, because they are not symmetric for NaN. `MP_NOPTS_VALUE` is
+  the same bit pattern on both sides, and the `playloop` script checks it
+  against mpv's own.
+- The fidelity check compares floats by bit pattern. A float crosses the
+  script and the output as the 16 hex digits of its bit pattern
+  (`Float.toBits`), so both sides start from the identical value, and a
+  difference in the last bit of a result is a divergence. There is no
+  tolerance. Two things are not compared:
+  - The sign of a zero result. mpv is built with `-fno-signed-zeros`, which
+    lets the compiler treat `-0.0` and `+0.0` as one value, so mpv's source
+    does not decide which of the two a zero result is. In the pinned build
+    `get_start_time` returns `-0.0` for a start time of `-0.0`, where the
+    source's `0 + start_time` gives `+0.0` in IEEE arithmetic and so does the
+    model. Both sides print every zero as `+0.0`. Inputs still include `-0.0`.
+    Where the model or a theorem gives a result of `0`, what is claimed of mpv
+    is a zero of either sign.
+  - The sign and payload of a NaN. Lean's `Float.ofBits` and `Float.toBits`
+    keep a single NaN, so the harness prints every NaN as `7ff8000000000000`.
+    Whether a result is NaN is compared.
 - Lean has no arithmetic laws for `Float`; its operations are opaque to the
   proof checker. So no theorem says what a sum, product or comparison of two
   times is. The theorems about float code state its case structure: which
@@ -221,14 +231,15 @@ found by reading the C source. None has been reproduced by running mpv.
   chapter-index bounds. What the arithmetic computes rests on the fidelity
   check alone.
 - A C `float` is a Lean `Float32`, and crosses the script as 8 hex digits,
-  with every NaN printed as `7fc00000`. C mixes the two widths: the gain
+  with every NaN printed as `7fc00000` and every zero as `00000000`. C mixes the two widths: the gain
   functions in `player/audio.c` keep a `float` but divide and call `pow` in
   `double`. A definition converts with `Float32.toFloat` and `Float.toFloat32`
   at exactly the points where C promotes or stores.
 - Three results come from the C math library. `Float.pow` and `Float.abs`
   compile to `pow` and `fabs`, the calls mpv makes. Lean has no `rint`, so
   `Video.rint` builds round-to-nearest-even from `Float.floor`, and the `video`
-  script compares it with libm's `rint` directly. `pow` is not correctly
+  script compares it with libm's `rint` directly, except for the sign of a
+  zero result. `pow` is not correctly
   rounded and may differ between C libraries, so `db_gain`,
   `compute_replaygain` and `audio_get_gain` are checked against the `pow` of
   the machine that runs `mpv-fidelity`, with both sides calling the same one.

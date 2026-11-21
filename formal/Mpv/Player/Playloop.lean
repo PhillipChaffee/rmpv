@@ -2,10 +2,17 @@
 A model of the playback time and position queries in mpv's `player/playloop.c`.
 
 A C `double` is a Lean `Float`, which is the same IEEE-754 binary64 type. Each
-definition performs the C function's operations in the C function's order, so
-results agree with mpv bit for bit. Comparisons are written the way the C macros
-write them, because `MPMAX` and `MPCLAMP` are not symmetric when an operand is
-NaN or a signed zero.
+definition performs the C function's operations in the C function's order, with
+IEEE arithmetic as the C source reads. Comparisons are written the way the C
+macros write them, because `MPMAX` and `MPCLAMP` are not symmetric when an
+operand is NaN.
+
+Results agree with mpv bit for bit, with one exception: the sign of a zero.
+mpv is built with `-fno-signed-zeros`, which lets the compiler treat `-0.0` and
+`+0.0` as the same value, so mpv's source does not decide which of the two a
+zero result is. Where a definition or a theorem here gives a result of `0`, the
+model's value is `+0.0`, and what is claimed of mpv is a zero of either sign.
+The fidelity check does not compare the sign of a zero.
 -/
 
 namespace Mpv.Player.Playloop
@@ -70,7 +77,10 @@ def getStartTime (c : Ctx) (dir : Int) : Float :=
   match c.demuxer with
   | none => 0
   | some d =>
-    -- `0 + start_time` is kept: it turns a start time of `-0.0` into `+0.0`.
+    -- `0 + start_time` is kept as the C source has it. In IEEE arithmetic it
+    -- turns a start time of `-0.0` into `+0.0`. mpv's real build does not: under
+    -- `-fno-signed-zeros` the compiler drops the addition and returns `-0.0`.
+    -- The two differ only in the sign of a zero, which the model does not claim.
     let res : Float := if !c.rebaseStartTime then 0 + d.startTime else 0
     if dir < 0 then res + fmax d.duration 0 else res
 

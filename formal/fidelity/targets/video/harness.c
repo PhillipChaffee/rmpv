@@ -48,15 +48,18 @@ bool __wrap_af_fmt_is_pcm(int format)
     return format == pcm_format;
 }
 
-// Lean's Float.toBits gives every NaN this one pattern, so the sign and payload
-// of a NaN are not compared.
+// The pattern printed for a double. Lean's Float.toBits gives every NaN one
+// pattern, so the sign and payload of a NaN are not compared. Nor is the sign
+// of a zero: mpv is built with -fno-signed-zeros, so the compiler chooses it,
+// not mpv's source. The zero is tested on its bits because under that flag the
+// compiler may drop a test on its value.
 static uint64_t bits(double d)
 {
     if (d != d)
         return 0x7ff8000000000000;
     uint64_t u;
     memcpy(&u, &d, sizeof(u));
-    return u;
+    return u == 0x8000000000000000 ? 0 : u;
 }
 
 static double from_bits(uint64_t u)
@@ -73,7 +76,7 @@ static uint32_t bits32(float f)
         return 0x7fc00000;
     uint32_t u;
     memcpy(&u, &f, sizeof(u));
-    return u;
+    return u == 0x80000000 ? 0 : u;
 }
 
 static float from_bits32(uint32_t u)

@@ -1,7 +1,9 @@
 /-!
 How values cross an oracle's script and output. A float crosses as the hex
 digits of its IEEE-754 bit pattern, 16 for a `double` and 8 for a `float`, so
-mpv and the model start from the identical value and the comparison is exact.
+mpv and the model start from the identical value. Output is compared bit for
+bit, except that a zero is printed without its sign: mpv is built with
+`-fno-signed-zeros`, so its source does not decide the sign of a zero result.
 -/
 
 namespace Oracle.Script
@@ -18,11 +20,17 @@ def showHex (width n : Nat) : String :=
 
 def float (word : String) : Float := Float.ofBits (hex word).toUInt64
 
-def showFloat (x : Float) : String := showHex 16 x.toBits.toNat
+/-- The bit pattern of `x`, with `-0.0` printed as `+0.0`. -/
+def showFloat (x : Float) : String :=
+  let bits := x.toBits.toNat
+  showHex 16 (if bits = 0x8000000000000000 then 0 else bits)
 
 def float32 (word : String) : Float32 := Float32.ofBits (hex word).toUInt32
 
-def showFloat32 (x : Float32) : String := showHex 8 x.toBits.toNat
+/-- The bit pattern of `x`, with `-0.0` printed as `+0.0`. -/
+def showFloat32 (x : Float32) : String :=
+  let bits := x.toBits.toNat
+  showHex 8 (if bits = 0x80000000 then 0 else bits)
 
 def int (word : String) : Int := word.toInt?.getD 0
 

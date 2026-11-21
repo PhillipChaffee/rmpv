@@ -6,7 +6,7 @@ Runs the playloop model on a script of operations, one per line on stdin, and
 prints the result and the state after each. `fidelity/` feeds the same script to
 mpv's real `playloop.c` and compares the output. A float crosses the script and
 the output as the 16 hex digits of its IEEE-754 bit pattern, so both sides start
-from the identical value and the comparison is exact.
+from the identical value. `Oracle.Script` says what the comparison leaves out.
 -/
 
 open Mpv.Player.Playloop
