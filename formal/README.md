@@ -44,7 +44,10 @@ stops. A second run skips finished stages and takes about a second. It writes:
 - `compile_commands.json`: one entry per compiled mpv C file.
 - `libmpv.a`: every mpv object.
 - `harness.rsp` and `harness-link.rsp`: the compile and link flags for a
-  program that includes mpv headers or an mpv `.c` file:
+  program that includes mpv headers or an mpv `.c` file. `harness.rsp` holds
+  every flag mpv's own C files are compiled with, such as `-O2` and
+  `-fno-signed-zeros`, except warnings, diagnostics and output names. The
+  script stops if mpv's files do not all share one flag set.
 
   ```bash
   cc @formal/.mpv-build/harness.rsp x.c @formal/.mpv-build/harness-link.rsp -o x
@@ -152,6 +155,14 @@ A target is a folder in `fidelity/targets/` with a `harness.c`, a
 with `cc @harness.rsp harness.c @harness-link.rsp` against the real static
 build in `.mpv-build` (`make mpv-build`; override with `--build`). A manifest
 may add `link_args`, extra linker arguments such as `-Wl,--wrap=name`.
+
+The harness does not run the object file mpv's build made for the file under
+test. `harness.c` includes that `.c` file, so the file is compiled again from
+source, together with the harness, with the flags in `harness.rsp`: the
+code-generation flags of the real build. Everything the file calls in other
+mpv files comes from `libmpv.a`, as mpv's build compiled it, except the callees
+a target replaces with `--wrap`. A planted bug is compiled the same way, from
+an edited copy of the file.
 
 | Target | mpv file | What the harness sets up |
 | --- | --- | --- |
