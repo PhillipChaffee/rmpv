@@ -32,6 +32,8 @@ pub(crate) struct Function {
     pub(crate) end_row: usize,
     /// Index is the path id. Path 0 spans the whole function.
     pub(crate) arms: Vec<Arm>,
+    /// Original rows inside the function that the parser could not read.
+    pub(crate) unreadable_rows: BTreeSet<usize>,
 }
 
 #[derive(Debug)]
@@ -195,7 +197,9 @@ impl SourceFile {
 /// Rewrites what the C grammar cannot read, keeping every byte and newline in place so rows
 /// and offsets stay aligned with the `LineMap`. Linemarkers and pragmas become spaces: the
 /// grammar rejects them inside expressions. GCC's `__builtin_offsetof`, which every option
-/// table uses, becomes the standard `offsetof`.
+/// table uses, becomes the standard `offsetof`. The operand of `__typeof__` becomes `x`: the
+/// grammar reads `__typeof__(identifier)` as a type but misreads an expression there, as in
+/// every `talloc_*` call, and the operand is never evaluated, so its branches are not paths.
 fn prepare_for_parser(preprocessed: &str) -> String {
     let mut out = String::with_capacity(preprocessed.len());
     for line in preprocessed.split_inclusive('\n') {
@@ -211,7 +215,79 @@ fn prepare_for_parser(preprocessed: &str) -> String {
             out.push_str(line);
         }
     }
-    out
+    let mut bytes = out.into_bytes();
+    blank_typeof_operands(&mut bytes);
+    String::from_utf8(bytes)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
+}
+
+const fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Replaces every byte but newlines inside `__typeof__( … )` and `__typeof( … )` with spaces,
+/// leaving one `x`. Every byte changed is replaced whole, so the text stays valid UTF-8.
+fn blank_typeof_operands(bytes: &mut [u8]) {
+    let mut at = 0;
+    while at < bytes.len() {
+        let starts_word = at == 0 || !bytes.get(at - 1).copied().is_some_and(is_identifier_byte);
+        let keyword = [&b"__typeof__"[..], b"__typeof"]
+            .into_iter()
+            .find(|keyword| {
+                bytes
+                    .get(at..)
+                    .is_some_and(|rest| rest.starts_with(keyword))
+            });
+        let Some(keyword) = keyword.filter(|_| starts_word) else {
+            at += 1;
+            continue;
+        };
+        let mut open = at + keyword.len();
+        if bytes.get(open).copied().is_some_and(is_identifier_byte) {
+            at = open;
+            continue;
+        }
+        while bytes.get(open).is_some_and(u8::is_ascii_whitespace) {
+            open += 1;
+        }
+        if bytes.get(open) != Some(&b'(') {
+            at = open;
+            continue;
+        }
+        let Some(close) = matching_paren(bytes, open) else {
+            return;
+        };
+        let mut wrote_name = false;
+        for byte in bytes.get_mut(open + 1..close).into_iter().flatten() {
+            if *byte != b'\n' {
+                *byte = if wrote_name { b' ' } else { b'x' };
+                wrote_name = true;
+            }
+        }
+        at = close + 1;
+    }
+}
+
+/// The index of the `)` closing the `(` at `open`, skipping string and character literals.
+fn matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
+    let (mut depth, mut quote, mut escaped) = (0_usize, None, false);
+    for (index, byte) in bytes.iter().enumerate().skip(open) {
+        match (quote, *byte) {
+            (Some(_), _) if escaped => escaped = false,
+            (Some(_), b'\\') => escaped = true,
+            (Some(q), b) if b == q => quote = None,
+            (None, b'"' | b'\'') => quote = Some(*byte),
+            (None, b'(') => depth += 1,
+            (None, b')') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn extract(
@@ -284,6 +360,23 @@ fn unparsed_rows(node: Node<'_>, parsed: &Parsed<'_>, rows: &mut BTreeSet<usize>
     }
 }
 
+/// Rows under ERROR and MISSING nodes. Branches in them yield no arm, so the path list of a
+/// function with such rows is incomplete.
+fn unreadable_rows_in(node: Node<'_>, parsed: &Parsed<'_>, rows: &mut BTreeSet<usize>) {
+    if node.is_error() || node.is_missing() {
+        let range = node.start_position().row..=node.end_position().row;
+        rows.extend(range.filter_map(|row| parsed.row(row)));
+        return;
+    }
+    if !node.has_error() {
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        unreadable_rows_in(child, parsed, rows);
+    }
+}
+
 fn collect_functions(
     node: Node<'_>,
     parsed: &Parsed<'_>,
@@ -332,6 +425,9 @@ fn function(node: Node<'_>, parsed: &Parsed<'_>, lines: &[&str]) -> Option<Funct
     for arm in &mut arms {
         arm.start_row = parsed.row(arm.start_row).unwrap_or(start_row);
     }
+    let mut unreadable_rows = BTreeSet::new();
+    unreadable_rows_in(node, parsed, &mut unreadable_rows);
+    unreadable_rows.retain(|row| (start_row..=end_row).contains(row));
 
     Some(Function {
         name,
@@ -339,6 +435,7 @@ fn function(node: Node<'_>, parsed: &Parsed<'_>, lines: &[&str]) -> Option<Funct
         start_row,
         end_row,
         arms,
+        unreadable_rows,
     })
 }
 
@@ -504,6 +601,34 @@ mod tests {
             kinds(file.functions.first().expect("one function")),
             ["body", "loop"]
         );
+    }
+
+    #[test]
+    fn lines_the_parser_cannot_read_inside_a_function_are_counted() {
+        let text = "int f(void) {\n    int x = 1;\n    x = __builtin_offsetof(struct a, b);\n    return x;\n}\n\
+                    int g(void) {\n    return 1\n}\n\
+                    int h(int a) {\n    return a ? 1 : 2;\n}\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let unreadable: Vec<(&str, Vec<usize>)> = file
+            .functions
+            .iter()
+            .map(|function| {
+                let rows = function.unreadable_rows.iter().copied().collect();
+                (function.name.as_str(), rows)
+            })
+            .collect();
+        assert_eq!(unreadable, [("f", vec![2]), ("g", vec![6]), ("h", vec![])]);
+    }
+
+    #[test]
+    fn a_typeof_cast_is_readable_and_its_operand_is_not_a_path() {
+        let text = "void f(int *e) {\n    e = (__typeof__((int *)g(e ? 1 : 2)))h(e);\n}\n";
+        let preprocessed = format!("# 1 \"f.c\"\n{text}");
+        let file = SourceFile::parse_preprocessed("f.c".to_owned(), text.to_owned(), &preprocessed)
+            .expect("parses");
+        let function = file.functions.first().expect("one function");
+        assert_eq!(function.unreadable_rows, BTreeSet::new());
+        assert_eq!(kinds(function), ["body"]);
     }
 
     #[test]

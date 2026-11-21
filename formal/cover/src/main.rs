@@ -281,6 +281,12 @@ impl Analysis {
             );
         }
         let listed = match &claim.paths {
+            Paths::All if !function.unreadable_rows.is_empty() => bail!(
+                "`{}` has {} lines the parser could not read, so its path list is incomplete; \
+                 list the claimed paths instead of `paths=all`",
+                claim.function,
+                function.unreadable_rows.len()
+            ),
             Paths::All => None,
             Paths::Listed(ids) => Some(ids),
         };
@@ -399,6 +405,16 @@ impl Analysis {
             out,
             "  {unparsed} C lines outside functions are in regions the parser could not read"
         );
+        let unreadable = self.files.iter().flat_map(|file| &file.functions);
+        let (lines, functions) = unreadable.fold((0, 0), |(lines, functions), function| {
+            let rows = function.unreadable_rows.len();
+            (lines + rows, functions + usize::from(rows > 0))
+        });
+        let _ = writeln!(
+            out,
+            "  {lines} lines in {functions} functions are in regions the parser could not read; \
+             branches there are not counted as paths"
+        );
         let raw = |extension: &str| {
             let raw = self.files.iter().filter(|file| !file.preprocessed);
             raw.filter(|file| file.path.ends_with(extension)).count()
@@ -507,11 +523,25 @@ impl Analysis {
             .iter()
             .find(|source| source.path == file)
             .context("file vanished")?;
+        let asserted = asserted_paths(function);
+        let paths = if function.unreadable_rows.is_empty() {
+            "all".to_owned()
+        } else {
+            let ids = (0..function.arms.len()).filter(|id| !asserted.contains(id));
+            ids.map(|id| id.to_string()).collect::<Vec<_>>().join(",")
+        };
         let mut out = format!(
-            "{} {file} {name} paths=all hash={}\n\n",
+            "{} {file} {name} paths={paths} hash={}\n\n",
             claims::MARKER,
             function.hash
         );
+        if !function.unreadable_rows.is_empty() {
+            let _ = writeln!(
+                out,
+                "The parser could not read the lines marked `X`. Branches there have no path id,\n\
+                 so `paths=all` is refused; check those lines before claiming the list above.\n"
+            );
+        }
         for row in function.start_row..=function.end_row {
             let starts: Vec<String> = function
                 .arms
@@ -520,7 +550,12 @@ impl Analysis {
                 .filter(|(_, arm)| arm.start_row == row)
                 .map(|(id, arm)| format!("{id}:{}", arm.kind))
                 .collect();
-            let _ = writeln!(out, "{:>14} | {}", starts.join(" "), source.line(row));
+            let mark = if function.unreadable_rows.contains(&row) {
+                'X'
+            } else {
+                '|'
+            };
+            let _ = writeln!(out, "{:>14} {mark} {}", starts.join(" "), source.line(row));
         }
         Ok(out)
     }
@@ -734,5 +769,26 @@ mod tests {
         let diff = analysis.diff(&[], false);
         assert!(diff.contains("\n!    mp_assert(a);\n"), "{diff}");
         assert!(diff.contains("\n         use(a);\n"), "{diff}");
+    }
+
+    #[test]
+    fn paths_all_is_refused_where_the_parser_could_not_read_the_function() {
+        let text = "int f(int a) {\n    if (a)\n        return __builtin_offsetof(struct s, m);\n    return 0;\n}\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let hash = file.functions.first().expect("one function").hash.clone();
+        let mut analysis = Analysis {
+            files: vec![file],
+            ..Analysis::default()
+        };
+        assert!(analysis.apply(&claim(Paths::All, &[], &hash)).is_err());
+        let listed = Paths::Listed(std::iter::once(0).collect());
+        analysis
+            .apply(&claim(listed, &[], &hash))
+            .expect("an explicit list applies");
+        assert!(
+            analysis.report().contains("1 lines in 1 functions"),
+            "{}",
+            analysis.report()
+        );
     }
 }

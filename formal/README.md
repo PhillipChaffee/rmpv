@@ -73,8 +73,8 @@ in the file itself. An arm that a macro expands to belongs to the line that
 invokes the macro, so `mp_assert(x)` has a `?` path (the assertion holds) and an
 `assert` path (it fails and aborts) on its own line. The body of a
 `do { } while (0)` is not a separate path, because it always runs once, and
-branches inside `sizeof` are not paths, because `sizeof` never evaluates its
-operand. Without `compile_commands.json`, every command stops and asks for
+branches inside `sizeof` or `__typeof__` are not paths, because neither
+evaluates its operand. Without `compile_commands.json`, every command stops and asks for
 `make mpv-build`; pass `--build <dir>` to read another build.
 
 A path that exists in C but whose only effect is memory management or log
@@ -169,7 +169,11 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 - In compiled files, code that `#if` leaves out of this build, such as Windows
   branches, is not counted.
 - Code outside functions, such as option tables, is not counted.
-- Regions the C parser cannot read are not counted.
+- Code the C parser cannot read has no paths. `report` gives two numbers: lines
+  outside functions, and lines inside functions with the number of functions
+  they are in. A branch in an unreadable line inside a function has no path id,
+  so that function's path list is incomplete: `show` marks those lines with
+  `X`, and `check` refuses `paths=all` for it, so a claim must list its paths.
 - Lua, JavaScript, Objective-C, and Swift sources are not parsed.
 
 ## Modelling conventions
