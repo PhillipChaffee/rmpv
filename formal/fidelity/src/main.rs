@@ -15,6 +15,8 @@ use std::{
     fs::{self, File},
     path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
 };
 
 /// A target's name and the generator for its operation scripts.
@@ -75,11 +77,17 @@ struct Run<'a> {
 }
 
 impl Run<'_> {
-    /// Builds the harness against mpv's source, with `mutation` planted when given.
-    fn build(&self, mutation: Option<&Mutation>) -> Result<PathBuf> {
-        let binary = self.work.join("harness");
+    /// Builds the harness against mpv's source. With a mutation, given with its
+    /// index in the manifest, the bug is planted and the build gets a directory
+    /// of its own, so mutants can be built at the same time.
+    fn build(&self, mutation: Option<(usize, &Mutation)>) -> Result<PathBuf> {
+        let directory = mutation.map_or_else(
+            || self.work.to_path_buf(),
+            |(index, _)| self.work.join("mutants").join(index.to_string()),
+        );
+        let binary = directory.join("harness");
         let mut cc = Command::new("cc");
-        if let Some(mutation) = mutation {
+        if let Some((_, mutation)) = mutation {
             let original = self.mpv.join(&self.target.file);
             let text = fs::read_to_string(&original)?;
             ensure!(
@@ -88,12 +96,12 @@ impl Run<'_> {
                 mutation.find,
                 self.target.file
             );
-            let mutated = self.work.join("mutant").join(&self.target.file);
-            let directory = mutated.parent().context("mutant path has no parent")?;
-            fs::create_dir_all(directory)?;
+            let source = directory.join("src");
+            let mutated = source.join(&self.target.file);
+            fs::create_dir_all(mutated.parent().context("mutant path has no parent")?)?;
             fs::write(&mutated, text.replace(&mutation.find, &mutation.replace))?;
             // The copy still includes its sibling headers by bare name.
-            cc.arg("-I").arg(self.work.join("mutant"));
+            cc.arg("-I").arg(source);
             cc.arg("-I")
                 .arg(original.parent().context("mpv file has no parent")?);
         }
@@ -108,10 +116,52 @@ impl Run<'_> {
         let output = cc.arg("-o").arg(&binary).output().context("running cc")?;
         ensure!(
             output.status.success(),
-            "harness does not compile:\n{}",
+            "harness does not compile{}:\n{}",
+            mutation.map_or_else(String::new, |(_, mutation)| format!(
+                " with `{}` replaced by `{}` in {}",
+                mutation.find, mutation.replace, mutation.function
+            )),
             String::from_utf8_lossy(&output.stderr)
         );
         Ok(binary)
+    }
+
+    /// Whether each planted bug goes unnoticed, in the manifest's order.
+    /// Mutants are built and run in parallel. The first one in that order that
+    /// does not compile is the error.
+    fn survivors(&self, model: &[String]) -> Result<Vec<bool>> {
+        let mutations = &self.target.mutation;
+        let workers = thread::available_parallelism()
+            .map_or(1, std::num::NonZero::get)
+            .min(mutations.len());
+        let next = AtomicUsize::new(0);
+        let work = || {
+            let mut done = Vec::new();
+            loop {
+                let index = next.fetch_add(1, Ordering::Relaxed);
+                let Some(mutation) = mutations.get(index) else {
+                    return done;
+                };
+                let survived = self
+                    .build(Some((index, mutation)))
+                    .and_then(|mutant| self.output(&mutant))
+                    .map(|mutant| first_divergence(model, &mutant).is_none());
+                done.push((index, survived));
+            }
+        };
+        let mut outcomes = Vec::new();
+        thread::scope(|scope| {
+            let handles: Vec<_> = (0..workers).map(|_| scope.spawn(work)).collect();
+            for handle in handles {
+                match handle.join() {
+                    Ok(done) => outcomes.extend(done),
+                    Err(_) => bail!("a thread building mutants panicked"),
+                }
+            }
+            Ok(())
+        })?;
+        outcomes.sort_by_key(|(index, _)| *index);
+        outcomes.into_iter().map(|(_, survived)| survived).collect()
     }
 
     /// Runs a program on the script. A crash or hang yields whatever it printed first.
@@ -215,13 +265,12 @@ fn check(cli: &Cli, name: &str, generate: Generator) -> Result<bool> {
     }
 
     let mut survivors = 0;
-    for mutation in &target.mutation {
-        let mutant = run.output(&run.build(Some(mutation))?)?;
-        if first_divergence(&model, &mutant).is_none() {
+    for (mutation, survived) in target.mutation.iter().zip(run.survivors(&model)?) {
+        if survived {
             survivors += 1;
             println!(
-                "{name}: SURVIVED in {}: `{}`",
-                mutation.function, mutation.replace
+                "{name}: SURVIVED in {}: `{}` replaced by `{}`",
+                mutation.function, mutation.find, mutation.replace
             );
         }
     }
