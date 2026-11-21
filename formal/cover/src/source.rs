@@ -6,6 +6,12 @@ use sha2::{Digest as _, Sha256};
 use std::{collections::BTreeSet, fmt::Write as _};
 use tree_sitter::{Node, Parser};
 
+/// Functions that report a failed assertion and abort. In this build `mp_assert` and
+/// `mp_require` are glibc's `assert`, whose failing side calls `__assert_fail`.
+const ASSERT_HANDLERS: [&str; 1] = ["__assert_fail"];
+/// Assertion macros as they appear in source that is parsed without the preprocessor.
+const ASSERT_MACROS: [&str; 3] = ["mp_assert", "mp_require", "assert"];
+
 /// One path through a function: the straight-line body (path 0) or a branch arm.
 #[derive(Debug)]
 pub(crate) struct Arm {
@@ -356,11 +362,54 @@ fn arm(node: Node<'_>, kind: &'static str) -> Arm {
     }
 }
 
+/// Whether `node` does nothing but call an assertion-failure handler.
+fn only_fails_assertion(node: Node<'_>, source: &[u8]) -> bool {
+    let mut node = node;
+    loop {
+        let mut cursor = node.walk();
+        let children: Vec<Node<'_>> = node
+            .named_children(&mut cursor)
+            .filter(|child| child.kind() != "comment")
+            .collect();
+        match (node.kind(), children.as_slice()) {
+            (
+                "parenthesized_expression" | "expression_statement" | "compound_statement",
+                [only],
+            ) => node = *only,
+            ("cast_expression", _) => match node.child_by_field_name("value") {
+                Some(value) => node = value,
+                None => return false,
+            },
+            ("call_expression", _) => return is_call_to(node, source, &ASSERT_HANDLERS),
+            _ => return false,
+        }
+    }
+}
+
+fn is_call_to(call: Node<'_>, source: &[u8], names: &[&str]) -> bool {
+    call.child_by_field_name("function")
+        .filter(|function| function.kind() == "identifier")
+        .and_then(|function| function.utf8_text(source).ok())
+        .is_some_and(|name| names.contains(&name))
+}
+
+/// A branch arm, or an `assert` arm when the branch only reports a failed assertion.
+fn branch(node: Node<'_>, source: &[u8], kind: &'static str) -> Arm {
+    arm(
+        node,
+        if only_fails_assertion(node, source) {
+            "assert"
+        } else {
+            kind
+        },
+    )
+}
+
 fn collect_arms(node: Node<'_>, source: &[u8], arms: &mut Vec<Arm>) {
     let field = |name| node.child_by_field_name(name);
     match node.kind() {
         "if_statement" => {
-            arms.extend(field("consequence").map(|then| arm(then, "if")));
+            arms.extend(field("consequence").map(|then| branch(then, source, "if")));
             // `else if` is the nested statement's own `if` arm.
             let otherwise = field("alternative")
                 .and_then(|alternative| {
@@ -368,7 +417,7 @@ fn collect_arms(node: Node<'_>, source: &[u8], arms: &mut Vec<Arm>) {
                     alternative.named_children(&mut cursor).last()
                 })
                 .filter(|body| body.kind() != "if_statement");
-            arms.extend(otherwise.map(|body| arm(body, "else")));
+            arms.extend(otherwise.map(|body| branch(body, source, "else")));
         }
         "case_statement" => arms.push(arm(node, "case")),
         "for_statement" | "while_statement" => {
@@ -384,8 +433,8 @@ fn collect_arms(node: Node<'_>, source: &[u8], arms: &mut Vec<Arm>) {
             }
         }
         "conditional_expression" => {
-            arms.extend(field("consequence").map(|then| arm(then, "?")));
-            arms.extend(field("alternative").map(|otherwise| arm(otherwise, ":")));
+            arms.extend(field("consequence").map(|then| branch(then, source, "?")));
+            arms.extend(field("alternative").map(|otherwise| branch(otherwise, source, ":")));
         }
         "binary_expression" => {
             let kind = match field("operator").map(|operator| operator.kind()) {
@@ -394,8 +443,12 @@ fn collect_arms(node: Node<'_>, source: &[u8], arms: &mut Vec<Arm>) {
                 _ => None,
             };
             if let Some((kind, right)) = kind.zip(field("right")) {
-                arms.push(arm(right, kind));
+                arms.push(branch(right, source, kind));
             }
+        }
+        // Without the preprocessor the macro is all there is of the assertion's failing side.
+        "call_expression" if is_call_to(node, source, &ASSERT_MACROS) => {
+            arms.push(arm(node, "assert"));
         }
         // The operand is never evaluated, so its branches are not paths.
         "sizeof_expression" | "alignof_expression" => return,
@@ -451,6 +504,39 @@ mod tests {
             kinds(file.functions.first().expect("one function")),
             ["body", "loop"]
         );
+    }
+
+    #[test]
+    fn assertion_macros_are_one_assert_arm_when_parsed_raw() {
+        let text = "void f(int a) { mp_assert(a > 0); assert(a); if (a) g(); }\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let function = file.functions.first().expect("one function");
+        assert_eq!(kinds(function), ["body", "assert", "assert", "if"]);
+    }
+
+    #[test]
+    fn a_branch_that_only_calls_the_assertion_handler_is_an_assert_arm() {
+        let dir = std::env::temp_dir().join(format!("mpv-cover-assert-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let text = "void __assert_fail(const char *, const char *, unsigned, const char *);\n\
+                    #define CHECK(x) ((x) ? (void)0 : __assert_fail(#x, \"f.c\", 3, \"f\"))\n\
+                    void f(int a) {\n    CHECK(a);\n    if (a) { __assert_fail(\"a\", \"f.c\", 5, \"f\"); }\n}\n";
+        std::fs::write(dir.join("f.c"), text).expect("write source");
+        let compile = Compile::new(
+            dir.clone(),
+            vec!["cc".to_owned(), "-c".to_owned(), "f.c".to_owned()],
+        );
+        let preprocessed = compile.preprocess();
+        std::fs::remove_dir_all(&dir).expect("remove temp dir");
+
+        let file = SourceFile::parse_preprocessed(
+            "f.c".to_owned(),
+            text.to_owned(),
+            &preprocessed.expect("cc -E runs"),
+        )
+        .expect("parses");
+        let function = file.functions.first().expect("one function");
+        assert_eq!(kinds(function), ["body", "?", "assert", "assert"]);
     }
 
     #[test]

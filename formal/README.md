@@ -70,8 +70,8 @@ that function.
 count. It runs `cc -E` on each file with that file's flags from
 `formal/.mpv-build/compile_commands.json`, and keeps only the functions defined
 in the file itself. An arm that a macro expands to belongs to the line that
-invokes the macro, so `mp_assert(x)` has a `?` path (the assertion holds) and a
-`:` path (it fails and aborts) on its own line. The body of a
+invokes the macro, so `mp_assert(x)` has a `?` path (the assertion holds) and an
+`assert` path (it fails and aborts) on its own line. The body of a
 `do { } while (0)` is not a separate path, because it always runs once, and
 branches inside `sizeof` are not paths, because `sizeof` never evaluates its
 operand. Without `compile_commands.json`, every command stops and asks for
@@ -87,8 +87,23 @@ be marked `unobservable`:
 
 A path cannot be in both lists. With `paths=all`, `unobservable=` takes its
 paths out of `all`. Unobservable paths are never counted as covered. Any other
-path the model does not account for, such as an `mp_assert` failure, stays out
-of both lists.
+path the model does not account for stays out of both lists.
+
+An arm that does nothing but call glibc's assertion-failure handler
+(`__assert_fail`, which `mp_assert`, `mp_require` and `assert` expand to in this
+build) has the kind `assert`; `show` labels it. In a file parsed without the
+preprocessor, each call to one of those macros is one `assert` arm. The tool
+finds these arms itself: a claim may not list them in `paths=` or
+`unobservable=`, and `paths=all` leaves them out. In a function with a current
+claim they count as `asserted`, on their own line in `report`, and `diff` marks
+their lines with `!`. In a function without a claim they are uncovered like any
+other path.
+
+Asserted means only this: the model takes the asserted condition as a
+hypothesis of its theorems and a precondition of the fidelity generator, so it
+describes mpv only while the assertion holds. It says nothing about what mpv
+does when an assertion fails, and it does not prove that no input can make one
+fail.
 
 Print a function's path ids and a ready-made claim line:
 
@@ -102,16 +117,18 @@ cargo run -q --release -p mpv-cover -- show common/playlist.c playlist_get_next
 cargo run -q --release -p mpv-cover -- report                   # totals per mpv directory
 cargo run -q --release -p mpv-cover -- diff                     # files that have claims
 cargo run -q --release -p mpv-cover -- diff player --uncovered  # what is missing in player/
-cargo run -q --release -p mpv-cover -- check --full             # fails until every path is covered or unobservable
+cargo run -q --release -p mpv-cover -- check --full             # fails until every path is covered, unobservable or asserted
 ```
 
 `diff` prints mpv's source in unified-diff form. A line starting with `-` is on
 a path the model does not account for. A line starting with `~` is on an
-unobservable path and on no unaccounted one. `report` prints the number of
-unobservable paths on its own line, under `TOTAL`.
+unobservable path and on no unaccounted one. A line starting with `!` is on an
+asserted path and on no unaccounted one. `report` prints the numbers of
+unobservable and asserted paths on their own lines, under `TOTAL`.
 
 `check` fails when a claim names a missing file, function, or path, when its
-hash is stale, when one path is both claimed and unobservable, when it has no declaration, or when a Lean file contains
+hash is stale, when one path is both claimed and unobservable, when it lists
+an `assert` path, when it has no declaration, or when a Lean file contains
 `sorry`, `axiom`, or another way around the proof checker.
 
 ## Checking the model against mpv

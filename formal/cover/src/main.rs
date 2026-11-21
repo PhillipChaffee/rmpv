@@ -48,7 +48,7 @@ enum Cmd {
     /// Coverage totals per mpv directory.
     Report,
     /// mpv source as a diff: `-` lines are paths the model does not account for, `~` lines
-    /// are unobservable paths.
+    /// are unobservable paths, `!` lines are failed assertions in modelled functions.
     Diff {
         /// mpv files or directories. Defaults to files with at least one claim.
         paths: Vec<String>,
@@ -58,8 +58,8 @@ enum Cmd {
     },
     /// One function with its path ids and hash, for writing a claim: `FILE FUNCTION`.
     Show { file: String, function: String },
-    /// Fail on invalid or stale claims. With `--full`, also fail on any path that is neither
-    /// covered nor unobservable.
+    /// Fail on invalid or stale claims. With `--full`, also fail on any path that is not
+    /// covered, unobservable or asserted.
     Check {
         #[arg(long)]
         full: bool,
@@ -112,17 +112,20 @@ struct Tally {
     paths: usize,
     paths_covered: usize,
     paths_unobservable: usize,
+    paths_asserted: usize,
     /// Covered paths in functions the fidelity check runs against real mpv.
     paths_checked: usize,
 }
 
 impl Tally {
-    fn add(&mut self, function: &Function, covered: usize, unobservable: usize, checked: bool) {
+    fn add(&mut self, function: &Function, accounted: &Accounted, checked: bool) {
+        let covered = accounted.covered.len();
         self.functions += 1;
-        self.functions_covered += usize::from(covered + unobservable == function.arms.len());
+        self.functions_covered += usize::from(accounted.len() == function.arms.len());
         self.paths += function.arms.len();
         self.paths_covered += covered;
-        self.paths_unobservable += unobservable;
+        self.paths_unobservable += accounted.unobservable.len();
+        self.paths_asserted += accounted.asserted.len();
         self.paths_checked += if checked { covered } else { 0 };
     }
 
@@ -137,6 +140,40 @@ impl Tally {
             self.paths,
             self.paths_checked
         )
+    }
+}
+
+/// The paths of one function that a current claim accounts for, each in one set.
+#[derive(Debug, Default)]
+struct Accounted {
+    covered: BTreeSet<usize>,
+    unobservable: BTreeSet<usize>,
+    /// `assert` arms: the model takes the assertion as a hypothesis, so their failing side is
+    /// outside it.
+    asserted: BTreeSet<usize>,
+}
+
+impl Accounted {
+    fn len(&self) -> usize {
+        self.covered.len() + self.unobservable.len() + self.asserted.len()
+    }
+
+    /// The sign `diff` gives a line on these paths.
+    fn sign(&self, paths: &[usize]) -> char {
+        let has = |set: &BTreeSet<usize>| paths.iter().any(|path| set.contains(path));
+        if paths.iter().any(|path| {
+            !self.covered.contains(path)
+                && !self.unobservable.contains(path)
+                && !self.asserted.contains(path)
+        }) {
+            '-'
+        } else if has(&self.asserted) {
+            '!'
+        } else if has(&self.unobservable) {
+            '~'
+        } else {
+            ' '
+        }
     }
 }
 
@@ -229,13 +266,13 @@ impl Analysis {
 
     fn apply(&mut self, claim: &Claim) -> Result<()> {
         let function = self.function(&claim.file, &claim.function)?;
-        let (hash, path_count) = (function.hash.clone(), function.arms.len());
-        let coverage = self
-            .coverage
-            .entry((claim.file.clone(), claim.function.clone()))
-            .or_default();
-        coverage.declarations.insert(claim.declaration.clone());
+        let hash = function.hash.clone();
+        let asserted = asserted_paths(function);
+        let path_count = function.arms.len();
+        let key = (claim.file.clone(), claim.function.clone());
         if claim.hash != hash {
+            let coverage = self.coverage.entry(key).or_default();
+            coverage.declarations.insert(claim.declaration.clone());
             coverage.stale = true;
             bail!(
                 "stale: `{}` now hashes to {hash}, the claim says {}",
@@ -248,13 +285,24 @@ impl Analysis {
             Paths::Listed(ids) => Some(ids),
         };
         let named = listed.into_iter().flatten().chain(&claim.unobservable);
-        if let Some(id) = named.into_iter().find(|id| **id >= path_count) {
-            bail!("`{}` has paths 0..{path_count}, not {id}", claim.function);
+        for id in named {
+            if *id >= path_count {
+                bail!("`{}` has paths 0..{path_count}, not {id}", claim.function);
+            }
+            if asserted.contains(id) {
+                bail!(
+                    "path {id} of `{}` is an assertion failure; the tool counts it as asserted",
+                    claim.function
+                );
+            }
         }
+        let coverage = self.coverage.entry(key).or_default();
+        coverage.declarations.insert(claim.declaration.clone());
         match listed {
-            None => coverage
-                .paths
-                .extend((0..path_count).filter(|id| !claim.unobservable.contains(id))),
+            None => coverage.paths.extend(
+                (0..path_count)
+                    .filter(|id| !claim.unobservable.contains(id) && !asserted.contains(id)),
+            ),
             Some(ids) => coverage.paths.extend(ids),
         }
         coverage.unobservable.extend(&claim.unobservable);
@@ -271,24 +319,24 @@ impl Analysis {
         function.with_context(|| format!("no function `{name}` in {file}"))
     }
 
-    /// The covered and the unobservable paths of a function. Both are empty for a stale claim.
-    fn accounted_paths(
-        &self,
-        file: &str,
-        function: &Function,
-    ) -> (BTreeSet<usize>, BTreeSet<usize>) {
+    /// What a current claim accounts for in a function. Empty without one, or when it is stale.
+    fn accounted(&self, file: &str, function: &Function) -> Accounted {
         self.coverage
             .get(&(file.to_owned(), function.name.clone()))
             .filter(|coverage| !coverage.stale)
-            .map(|coverage| (coverage.paths.clone(), coverage.unobservable.clone()))
+            .map(|coverage| Accounted {
+                covered: coverage.paths.clone(),
+                unobservable: coverage.unobservable.clone(),
+                asserted: asserted_paths(function),
+            })
             .unwrap_or_default()
     }
 
     fn tally(&self, tally: &mut Tally, file: &SourceFile) {
         for function in &file.functions {
-            let (covered, unobservable) = self.accounted_paths(&file.path, function);
+            let accounted = self.accounted(&file.path, function);
             let checked = self.is_checked(&file.path, function);
-            tally.add(function, covered.len(), unobservable.len(), checked);
+            tally.add(function, &accounted, checked);
         }
     }
 
@@ -330,6 +378,11 @@ impl Analysis {
             out,
             "{:<12} {:>15} {:>7} paths only manage memory or write logs; not in covered",
             "unobservable", "", total.paths_unobservable
+        );
+        let _ = writeln!(
+            out,
+            "{:<12} {:>15} {:>7} paths fail an assertion in modelled functions; not in covered",
+            "asserted", "", total.paths_asserted
         );
 
         let code: usize = self.files.iter().map(|file| file.code_lines).sum();
@@ -398,8 +451,8 @@ impl Analysis {
         for file in self.files.iter().filter(|file| selected(file)) {
             let mut hunks = String::new();
             for function in &file.functions {
-                let (covered, unobservable) = self.accounted_paths(&file.path, function);
-                if uncovered_only && covered.len() + unobservable.len() == function.arms.len() {
+                let accounted = self.accounted(&file.path, function);
+                if uncovered_only && accounted.len() == function.arms.len() {
                     continue;
                 }
                 let key = (file.path.clone(), function.name.clone());
@@ -418,30 +471,24 @@ impl Analysis {
                     }
                     None => "not modelled".to_owned(),
                 };
-                let unobservable_count = if unobservable.is_empty() {
-                    String::new()
-                } else {
-                    format!(", {} unobservable", unobservable.len())
-                };
+                let mut extra = String::new();
+                for (count, label) in [
+                    (accounted.unobservable.len(), "unobservable"),
+                    (accounted.asserted.len(), "asserted"),
+                ] {
+                    if count > 0 {
+                        let _ = write!(extra, ", {count} {label}");
+                    }
+                }
                 let _ = writeln!(
                     hunks,
-                    "@@ {} : {}/{} paths{unobservable_count}, {status} @@",
+                    "@@ {} : {}/{} paths{extra}, {status} @@",
                     function.name,
-                    covered.len(),
+                    accounted.covered.len(),
                     function.arms.len()
                 );
                 for row in function.start_row..=function.end_row {
-                    let line_paths = file.row_paths(function, row);
-                    let sign = if line_paths
-                        .iter()
-                        .any(|path| !covered.contains(path) && !unobservable.contains(path))
-                    {
-                        '-'
-                    } else if line_paths.iter().any(|path| unobservable.contains(path)) {
-                        '~'
-                    } else {
-                        ' '
-                    };
+                    let sign = accounted.sign(&file.row_paths(function, row));
                     let _ = writeln!(hunks, "{sign}{}", file.line(row));
                 }
             }
@@ -512,6 +559,13 @@ fn checked_functions(formal: &Path) -> Result<BTreeSet<(String, String)>> {
     Ok(checked)
 }
 
+fn asserted_paths(function: &Function) -> BTreeSet<usize> {
+    let arms = function.arms.iter().enumerate();
+    arms.filter(|(_, arm)| arm.kind == "assert")
+        .map(|(id, _)| id)
+        .collect()
+}
+
 /// Parses every source file, running the preprocessor first for files the build compiles.
 fn parse_sources(mpv: &Path, paths: &[String], database: &Database) -> Result<Vec<SourceFile>> {
     let parse = |path: &String| -> Result<SourceFile> {
@@ -574,9 +628,9 @@ fn run(cli: &Cli) -> Result<(String, bool)> {
         Cmd::Show { file, function } => (analysis.show(file, function)?, true),
         Cmd::Check { full } => {
             let total = analysis.total();
-            let missing = total
-                .paths
-                .saturating_sub(total.paths_covered + total.paths_unobservable);
+            let missing = total.paths.saturating_sub(
+                total.paths_covered + total.paths_unobservable + total.paths_asserted,
+            );
             let complete = missing == 0;
             let mut out = total.row("TOTAL");
             out.push_str(&analysis.problem_list());
@@ -645,5 +699,40 @@ mod tests {
         assert!(diff.contains("\n~        grow();\n"), "{diff}");
         assert!(diff.contains("\n     use(a);\n"), "{diff}");
         assert!(analysis.apply(&claim(Paths::All, &[2], &hash)).is_err());
+    }
+
+    #[test]
+    fn assert_arms_of_a_claimed_function_are_asserted_and_not_claimable() {
+        let text = "void f(int a) {\n    mp_assert(a);\n    if (a)\n        use(a);\n}\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let hash = file.functions.first().expect("one function").hash.clone();
+        let mut analysis = Analysis {
+            files: vec![file],
+            ..Analysis::default()
+        };
+        let unclaimed = analysis.total();
+        assert_eq!((unclaimed.paths, unclaimed.paths_asserted), (3, 0));
+
+        let listed = Paths::Listed([0, 1, 2].into_iter().collect());
+        assert!(analysis.apply(&claim(listed, &[], &hash)).is_err());
+        assert!(analysis.apply(&claim(Paths::All, &[1], &hash)).is_err());
+        analysis
+            .apply(&claim(Paths::All, &[], &hash))
+            .expect("claim applies");
+
+        let total = analysis.total();
+        assert_eq!(
+            (
+                total.paths,
+                total.paths_covered,
+                total.paths_unobservable,
+                total.paths_asserted
+            ),
+            (3, 2, 0, 1)
+        );
+        assert_eq!(total.functions_covered, 1);
+        let diff = analysis.diff(&[], false);
+        assert!(diff.contains("\n!    mp_assert(a);\n"), "{diff}");
+        assert!(diff.contains("\n         use(a);\n"), "{diff}");
     }
 }
