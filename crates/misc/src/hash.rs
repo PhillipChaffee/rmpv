@@ -316,7 +316,7 @@ fn upper_hex_digit(v: u8) -> u8 {
 pub fn mp_hash_to_bstr(data: &[u8], algorithm: &[u8]) -> Vec<u8> {
     let md5_hash;
     let sha256_hash;
-    let hash: &[u8] = if strcmp(algorithm, b"MD5") == 0 {
+    let digest: &[u8] = if strcmp(algorithm, b"MD5") == 0 {
         md5_hash = md5(data);
         &md5_hash
     } else {
@@ -327,10 +327,13 @@ pub fn mp_hash_to_bstr(data: &[u8], algorithm: &[u8]) -> Vec<u8> {
 
     let mut ret = Vec::new();
     let mut n = 0;
-    while n < hash.len() {
+    while n < digest.len() {
         bstr_xappend(
             &mut ret,
-            &[upper_hex_digit(hash[n] >> 4), upper_hex_digit(hash[n] & 15)],
+            &[
+                upper_hex_digit(digest[n] >> 4),
+                upper_hex_digit(digest[n] & 15),
+            ],
         );
         n += 1;
     }

@@ -112,22 +112,31 @@ pub fn mp_parse_escape<'a>(dst: &mut Vec<u8>, code: &'a [u8]) -> (bool, &'a [u8]
 pub fn mp_append_escaped_string<'a>(dst: &mut Vec<u8>, src: &'a [u8]) -> Option<&'a [u8]> {
     let mut t = src;
     let mut cur = 0;
-    loop {
+    let mut ok = true;
+    let mut done = false;
+    // The C returns from inside this loop. Aeneas does not translate a loop
+    // that returns a borrowed value, so the loop only finds where to stop.
+    while !done {
         if cur >= t.len() || t[cur] == b'"' {
-            let rest = bstr_cut(t, cur as i32);
-            bstr_xappend(dst, bstr_splice(t, 0, cur as i32));
-            return Some(rest);
+            done = true;
         } else if t[cur] == b'\\' {
             bstr_xappend(dst, bstr_splice(t, 0, cur as i32));
             t = bstr_cut(t, cur as i32 + 1);
             cur = 0;
-            let (ok, rest) = mp_parse_escape(dst, t);
-            if !ok {
-                return None;
-            }
+            let (good, rest) = mp_parse_escape(dst, t);
             t = rest;
+            if !good {
+                ok = false;
+                done = true;
+            }
         } else {
             cur += 1;
         }
     }
+    if !ok {
+        return None;
+    }
+    let rest = bstr_cut(t, cur as i32);
+    bstr_xappend(dst, bstr_splice(t, 0, cur as i32));
+    Some(rest)
 }

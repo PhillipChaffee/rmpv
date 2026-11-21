@@ -1,15 +1,15 @@
 //! Port of `misc/path_utils.c` as built without `HAVE_DOS_PATHS`.
 //!
-//! Paths are bytes, as in C. They become `OsStr` only where the operating
-//! system is asked about them.
-
-use std::ffi::OsStr;
-use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
-use std::os::unix::fs::{DirBuilderExt as _, MetadataExt as _};
+//! Paths are bytes, as in C. The system calls are in [`crate::os`].
 
 use crate::bstr::{bstr_find0, bstr_splice, bstr_split_tok, bstr0, bstrdup0, bstrrchr, bstrspn};
 use crate::clib::{cstr_at, memchr, strchr, strcmp, strlen};
 use crate::ctype::{mp_isalnum, mp_isalpha};
+use crate::os;
+
+/// The string `mp_dirname` returns for a path without a directory. A static,
+/// because Aeneas cannot return a byte-string literal by reference.
+static DOT: [u8; 1] = [b'.'];
 
 /// `mp_path_separators`.
 const MP_PATH_SEPARATORS: &[u8] = b"/";
@@ -36,7 +36,7 @@ pub fn mp_dirname(path: &[u8]) -> &[u8] {
     let path = bstr0(path);
     let len = path.len() - mp_basename(path).len();
     if len == 0 {
-        return b".";
+        return &DOT;
     }
     &path[..len]
 }
@@ -124,21 +124,15 @@ pub fn mp_path_join(p1: &[u8], p2: &[u8]) -> Vec<u8> {
 /// system reports. `None` where the C returns NULL.
 #[must_use]
 pub fn mp_getcwd() -> Option<Vec<u8>> {
-    if let Some(e_wd) = std::env::var_os("PWD") {
-        let e_wd = e_wd.into_vec();
-        if mp_path_is_absolute(&e_wd)
-            && let Ok(pwd_st) = std::fs::metadata(OsStr::from_bytes(&e_wd))
-            && let Ok(dot_st) = std::fs::metadata(".")
-            && pwd_st.dev() == dot_st.dev()
-            && pwd_st.ino() == dot_st.ino()
-        {
+    if let Some(e_wd) = os::getenv("PWD") {
+        // getenv() returns a C string.
+        let e_wd = bstrdup0(&e_wd);
+        if mp_path_is_absolute(&e_wd) && os::stat_same_file(&e_wd, &DOT) {
             return Some(e_wd);
         }
     }
 
-    std::env::current_dir()
-        .ok()
-        .map(|wd| wd.into_os_string().into_vec())
+    os::getcwd()
 }
 
 /// The component loop of `mp_normalize_path`. `None` if a `..` component
@@ -155,15 +149,15 @@ fn normalize_components(path: &[u8]) -> Option<Vec<u8>> {
         let component = &path[ptr..next];
         ptr = next + 1;
 
-        if component.is_empty() || component == b"." {
-            continue;
-        }
-        if component == b".." {
+        let len = component.len();
+        let skip = len == 0 || (len == 1 && component[0] == b'.');
+        if len == 2 && component[0] == b'.' && component[1] == b'.' {
             return None;
         }
-
-        result.push(b'/');
-        result.extend_from_slice(component);
+        if !skip {
+            result.push(b'/');
+            result.extend_from_slice(component);
+        }
     }
 
     if result.is_empty() {
@@ -196,9 +190,9 @@ pub fn mp_normalize_path(path: &[u8]) -> Vec<u8> {
 
     match normalize_components(full) {
         Some(result) => result,
-        None => match std::fs::canonicalize(OsStr::from_bytes(full)) {
-            Ok(resolved) => resolved.into_os_string().into_vec(),
-            Err(_) => full.to_vec(),
+        None => match os::realpath(full) {
+            Some(resolved) => resolved,
+            None => full.to_vec(),
         },
     }
 }
@@ -206,13 +200,13 @@ pub fn mp_normalize_path(path: &[u8]) -> Vec<u8> {
 /// `mp_path_exists` on a C string.
 #[must_use]
 pub fn mp_path_exists(path: &[u8]) -> bool {
-    std::fs::metadata(OsStr::from_bytes(bstr0(path))).is_ok()
+    os::stat_ok(bstr0(path))
 }
 
 /// `mp_path_isdir` on a C string.
 #[must_use]
 pub fn mp_path_isdir(path: &[u8]) -> bool {
-    std::fs::metadata(OsStr::from_bytes(bstr0(path))).is_ok_and(|st| st.is_dir())
+    os::stat_is_dir(bstr0(path))
 }
 
 /// `mp_is_url`: whether `path` starts with a protocol and `://`.
@@ -226,7 +220,9 @@ pub fn mp_is_url(path: &[u8]) -> bool {
     let mut i: i32 = 0;
     while i < proto {
         let c = path[i as usize];
-        if (i == 0 && !mp_isalpha(c)) || (!mp_isalnum(c) && c != b'.' && c != b'-' && c != b'+') {
+        let bad =
+            (i == 0 && !mp_isalpha(c)) || (!mp_isalnum(c) && c != b'.' && c != b'-' && c != b'+');
+        if bad {
             return false;
         }
         i += 1;
@@ -257,19 +253,15 @@ pub fn mp_mkdirp(dir: &[u8]) {
         return;
     }
 
-    let mut builder = std::fs::DirBuilder::new();
-    builder.mode(0o777);
-    let mut cdir = Some(1);
-    while let Some(from) = cdir {
-        let slash = strchr(&dir[from..], b'/').map(|offset| from + offset);
-        let prefix = match slash {
-            Some(pos) => &dir[..pos],
-            None => dir,
-        };
-
-        // The C ignores the result of mkdir() as well.
-        let _ = builder.create(OsStr::from_bytes(prefix));
-
-        cdir = slash.map(|pos| pos + 1);
+    let mut cdir = 1;
+    let mut more = true;
+    while more {
+        if let Some(offset) = strchr(&dir[cdir..], b'/') {
+            os::mkdir(&dir[..cdir + offset]);
+            cdir += offset + 1;
+        } else {
+            os::mkdir(dir);
+            more = false;
+        }
     }
 }

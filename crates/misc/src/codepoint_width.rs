@@ -95,7 +95,7 @@ fn cluster_width(cp: i32, s: &[u8]) -> (i32, &[u8]) {
             break;
         }
 
-        let (next_cp, cluster_end) = bstr_decode_utf8(s, s);
+        let (next_cp, cluster_end) = bstr_decode_utf8(s);
         cp = next_cp;
         if cp < 0 {
             break;

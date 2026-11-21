@@ -4,12 +4,11 @@
 //! `mp_rand_state` value passed by pointer, so the port has no hidden state
 //! either.
 
-use std::io::Read as _;
-
 use crate::common::mp_round_next_power_of_2;
+use crate::os;
 
 /// `mp_rand_state`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(aeneas), derive(Debug, Clone, Copy, PartialEq, Eq))]
 pub struct MpRandState {
     pub v: [u64; 4],
 }
@@ -27,32 +26,6 @@ pub fn splitmix64(x: &mut u64) -> u64 {
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     z ^ (z >> 31)
-}
-
-/// Stand-in for `av_random_bytes` of libavutil as `mp_rand_seed` calls it:
-/// 32 bytes from the operating system, or `None` if it has none to give.
-fn av_random_bytes() -> Option<[u64; 4]> {
-    let mut buf = [0_u8; 32];
-    let mut file = std::fs::File::open("/dev/urandom").ok()?;
-    file.read_exact(&mut buf).ok()?;
-    let mut v = [0_u64; 4];
-    for (word, chunk) in v.iter_mut().zip(buf.chunks_exact(8)) {
-        let mut bytes = [0_u8; 8];
-        bytes.copy_from_slice(chunk);
-        *word = u64::from_ne_bytes(bytes);
-    }
-    Some(v)
-}
-
-/// The C falls back to the raw clock mixed with two addresses. Addresses are
-/// not observable in safe Rust, so only the clock is used.
-fn fallback_seed() -> u64 {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
-    now.map_or(1, |d| {
-        d.as_secs()
-            .wrapping_mul(1_000_000_000)
-            .wrapping_add(u64::from(d.subsec_nanos()))
-    })
 }
 
 /// The part of `mp_rand_seed` that runs for a known seed.
@@ -73,10 +46,10 @@ pub fn mp_rand_seed_from(seed: u64) -> MpRandState {
 #[must_use]
 pub fn mp_rand_seed(seed: u64) -> MpRandState {
     if seed == 0 {
-        if let Some(v) = av_random_bytes() {
+        if let Some(v) = os::random_state() {
             return MpRandState { v };
         }
-        return mp_rand_seed_from(fallback_seed());
+        return mp_rand_seed_from(os::clock_seed());
     }
     mp_rand_seed_from(seed)
 }

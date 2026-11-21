@@ -3,7 +3,7 @@
 #[path = "language_tables.rs"]
 mod tables;
 
-use crate::bstr::{bstr_split, bstr_strip, bstrcasecmp, bstrcasecmp0};
+use crate::bstr::{bstr_split, bstr_strip, bstr0, bstrcasecmp, bstrcasecmp0};
 use crate::ctype::mp_isalpha;
 use crate::path_utils::mp_strip_ext;
 use tables::LANGMAP;
@@ -15,7 +15,7 @@ pub const TRACK_DEFAULT: u32 = 1 << 6;
 
 /// `struct lang`: a language code and its canonical three-letter form, each
 /// as up to 3 bytes and a length.
-#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(aeneas), derive(Debug, Clone, Copy))]
 pub struct Lang {
     pub match_s: [u8; 3],
     pub match_l: u8,
@@ -51,34 +51,44 @@ pub fn canonicalize(lang: &[u8]) -> &[u8] {
     lang
 }
 
+/// `lang_parts[part]`. The C keeps the parts of `lang` as an array of
+/// views; here each part is its offset in `lang` and its length.
+fn lang_part<'a>(lang: &'a [u8], lang_parts: &[(usize, usize)], part: usize) -> &'a [u8] {
+    let (start, len) = lang_parts[part];
+    &lang[start..start + len]
+}
+
 /// The `while (rest.len)` loop of `mp_match_lang` for one entry of `langs`:
 /// its score before the best is taken.
-fn match_one(lang_parts: &[&[u8]], candidate: &[u8], idx: i32) -> i32 {
+fn match_one(lang: &[u8], lang_parts: &[(usize, usize)], candidate: &[u8], idx: i32) -> i32 {
     let lang_parts_n = lang_parts.len() as i32;
     let mut rest = candidate;
     let mut part: i32 = 0;
     let mut score: i32 = 0;
-    while !rest.is_empty() {
+    let mut done = false;
+    while !done && !rest.is_empty() {
         let (s, next) = bstr_split(rest, b"-");
         rest = next;
         if part == 0 {
-            if bstrcasecmp(canonicalize(lang_parts[0]), canonicalize(s)) != 0 {
-                break;
+            if bstrcasecmp(
+                canonicalize(lang_part(lang, lang_parts, 0)),
+                canonicalize(s),
+            ) != 0
+            {
+                done = true;
+            } else {
+                score = i32::MAX - idx;
+                part += 1;
             }
-            score = i32::MAX - idx;
+        } else if part >= lang_parts_n {
+            done = true;
+        } else {
+            if bstrcasecmp(lang_part(lang, lang_parts, part as usize), s) != 0 {
+                score -= 1000;
+            }
+
             part += 1;
-            continue;
         }
-
-        if part >= lang_parts_n {
-            break;
-        }
-
-        if bstrcasecmp(lang_parts[part as usize], s) != 0 {
-            score -= 1000;
-        }
-
-        part += 1;
     }
     score - (lang_parts_n - part) * 1000
 }
@@ -87,13 +97,14 @@ fn match_one(lang_parts: &[&[u8]], candidate: &[u8], idx: i32) -> i32 {
 /// list `langs`, 0 for no match. Both hold C strings; a NULL `lang` or
 /// `langs` in C is the empty value here, with the same result.
 #[must_use]
-pub fn mp_match_lang(langs: &[&[u8]], lang: &[u8]) -> i32 {
-    let mut lang_parts: Vec<&[u8]> = Vec::new();
-    let mut rest = crate::bstr::bstr0(lang);
+pub fn mp_match_lang(langs: &[Vec<u8>], lang: &[u8]) -> i32 {
+    let lang = bstr0(lang);
+    let mut lang_parts: Vec<(usize, usize)> = Vec::new();
+    let mut rest = lang;
     while !rest.is_empty() {
         let (s, next) = bstr_split(rest, b"-");
+        lang_parts.push((lang.len() - next.len() - s.len(), s.len()));
         rest = next;
-        lang_parts.push(s);
     }
 
     let mut best_score = 0;
@@ -103,7 +114,7 @@ pub fn mp_match_lang(langs: &[&[u8]], lang: &[u8]) -> i32 {
 
     let mut idx: i32 = 0;
     while (idx as usize) < langs.len() {
-        let score = match_one(&lang_parts, crate::bstr::bstr0(langs[idx as usize]), idx);
+        let score = match_one(lang, &lang_parts, bstr0(&langs[idx as usize]), idx);
         best_score = if best_score > score {
             best_score
         } else {
@@ -117,15 +128,9 @@ pub fn mp_match_lang(langs: &[&[u8]], lang: &[u8]) -> i32 {
 
 /// The `suffixes` loop of `mp_guess_lang_from_filename`.
 fn is_hearing_impaired_tag(tag: &[u8]) -> bool {
-    const SUFFIXES: [&[u8]; 3] = [b"sdh", b"hi", b"cc"];
-    let mut n = 0;
-    while n < SUFFIXES.len() {
-        if bstrcasecmp0(tag, SUFFIXES[n]) == 0 {
-            return true;
-        }
-        n += 1;
-    }
-    false
+    bstrcasecmp0(tag, b"sdh") == 0
+        || bstrcasecmp0(tag, b"hi") == 0
+        || bstrcasecmp0(tag, &[b'c', b'c']) == 0
 }
 
 /// The innermost loop of `mp_guess_lang_from_filename`: walks `i` left over
@@ -170,13 +175,15 @@ pub fn mp_guess_lang_from_filename(name: &[u8]) -> (&[u8], i32, u32) {
         i -= 1;
     }
 
-    loop {
+    let mut failed = false;
+    let mut done = false;
+    while !done {
         let (next_i, letters) = skip_alpha_backwards(name, i);
         i = next_i;
         lang_length += letters;
 
+        let mut matched = false;
         if i >= 0 && lang_length >= 2 && name[i as usize] == delimiter {
-            let mut matched = false;
             let tag = &name[(i + 1) as usize..(i + 1 + lang_length) as usize];
             if is_hearing_impaired_tag(tag) {
                 flags |= TRACK_HEARING_IMPAIRED;
@@ -190,25 +197,24 @@ pub fn mp_guess_lang_from_filename(name: &[u8]) -> (&[u8], i32, u32) {
                 flags |= TRACK_DEFAULT;
                 matched = true;
             }
-            if matched {
-                lang_length = 0;
-                i -= if delimiter == b'.' { 1 } else { 2 };
-                continue;
-            }
         }
-
-        // Subtags after the first have 1 to 8 letters.
-        if lang_length < suffixes_length + 1 || lang_length > suffixes_length + 8 {
-            return (none, -1, flags);
-        }
-
-        if i >= 0 && name[i as usize] == b'-' {
+        if matched {
+            lang_length = 0;
+            i -= if delimiter == b'.' { 1 } else { 2 };
+        } else if lang_length < suffixes_length + 1 || lang_length > suffixes_length + 8 {
+            // Subtags after the first have 1 to 8 letters.
+            failed = true;
+            done = true;
+        } else if i >= 0 && name[i as usize] == b'-' {
             lang_length += 1;
             i -= 1;
             suffixes_length = lang_length;
         } else {
-            break;
+            done = true;
         }
+    }
+    if failed {
+        return (none, -1, flags);
     }
 
     // The primary subtag has 2 or 3 letters.

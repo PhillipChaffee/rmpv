@@ -435,7 +435,7 @@ fn bstr_decode_utf8() {
         // alone on an error.
         let mut next = Bstr::of(&s);
         let want = c!(bstr_decode_utf8(Bstr::of(&s), &raw mut next));
-        let (got, r_next) = port::bstr_decode_utf8(&s, &s);
+        let (got, r_next) = port::bstr_decode_utf8(&s);
         assert_eq!(want, got, "{s:?}");
         assert!(same_view(c_view(&s, next), r_view(&s, r_next)), "{s:?}");
     });
@@ -447,7 +447,7 @@ fn bstr_split_utf8() {
         let s = utf8_input(rng);
         let mut next = Bstr::of(&s);
         let ret = c!(bstr_split_utf8(Bstr::of(&s), &raw mut next));
-        let (r_ret, r_next) = port::bstr_split_utf8(&s, &s);
+        let (r_ret, r_next) = port::bstr_split_utf8(&s);
         assert!(same_view(c_view(&s, ret), r_view(&s, r_ret)), "{s:?}");
         assert!(same_view(c_view(&s, next), r_view(&s, r_next)), "{s:?}");
     });
@@ -587,10 +587,9 @@ fn bstr_find_in_list0() {
         let want = with_c_list(&list, |p| {
             c!(bstr_find_in_list0(Bstr::of(&s), p, case_sensitive))
         });
-        let refs: Vec<&[u8]> = list.iter().map(Vec::as_slice).collect();
         assert_eq!(
             want,
-            port::bstr_find_in_list0(&s, &refs, case_sensitive),
+            port::bstr_find_in_list0(&s, &list, case_sensitive),
             "{s:?} {list:?}"
         );
     });
@@ -602,8 +601,7 @@ fn bstr_in_list0() {
         let s = input::bytes(rng, 6);
         let list = string_list(rng, &s);
         let want = with_c_list(&list, |p| c!(bstr_in_list0(Bstr::of(&s), p)));
-        let refs: Vec<&[u8]> = list.iter().map(Vec::as_slice).collect();
-        assert_eq!(want, port::bstr_in_list0(&s, &refs), "{s:?} {list:?}");
+        assert_eq!(want, port::bstr_in_list0(&s, &list), "{s:?} {list:?}");
     });
 }
 

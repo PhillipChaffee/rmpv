@@ -356,10 +356,9 @@ fn mp_match_lang() {
         ptrs.push(null_mut());
         let lang0 = cstring(&lang);
         let want = c!(mp_match_lang(ptrs.as_mut_ptr(), lang0.as_ptr().cast()));
-        let refs: Vec<&[u8]> = langs.iter().map(Vec::as_slice).collect();
         assert_eq!(
             want,
-            language::mp_match_lang(&refs, &lang),
+            language::mp_match_lang(&langs, &lang),
             "{lang:?} {langs:?}"
         );
     });

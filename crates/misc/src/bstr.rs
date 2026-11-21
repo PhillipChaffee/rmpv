@@ -5,7 +5,8 @@
 //! The port keeps the `int` variables as `i32` and writes each implicit C
 //! conversion as an `as` cast, so both sides agree wherever the C is defined.
 
-use crate::clib::{cstr, memchr, memcmp, memrchr, strchr, strncasecmp, strndup, strtod, strtoll};
+use crate::cfloat::strtod;
+use crate::clib::{cstr, memchr, memcmp, memrchr, strchr, strncasecmp, strndup, strtoll};
 use crate::common::{mp_append_utf8_bstr, mp_log2};
 use crate::ctype::{mp_isspace, mp_tolower};
 
@@ -367,25 +368,29 @@ pub fn bstr_decode_partial_utf8(s: &[u8]) -> (i32, &[u8]) {
     (codepoint as i32, &s[pos..])
 }
 
-/// `bstr_decode_utf8`. `out_next` is the caller's current value of the C
-/// out-parameter; it comes back unchanged on an error.
+/// `bstr_decode_utf8`: the code point at the start of `s` and the string
+/// after it, or a negative `BSTR_DECODE_*` code and `s` itself.
+///
+/// The C writes the rest through `out_next` and leaves it alone on an
+/// error. Its callers either pass their own string there or do not read it
+/// after an error, which is the same as getting `s` back.
 #[must_use]
-pub fn bstr_decode_utf8<'a>(s: &'a [u8], out_next: &'a [u8]) -> (i32, &'a [u8]) {
+pub fn bstr_decode_utf8(s: &[u8]) -> (i32, &[u8]) {
     let (res, next) = bstr_decode_partial_utf8(s);
     if res >= 0 {
         return (res, next);
     }
-    (res, out_next)
+    (res, s)
 }
 
-/// `bstr_split_utf8`: the bytes of the first code point, and `out_next`
-/// advanced past it. On an error the first part is empty and `out_next`
-/// comes back unchanged.
+/// `bstr_split_utf8`: the bytes of the first code point and the string
+/// after it. On an error the first part is empty and the second is `s`
+/// itself, where the C leaves `out_next` alone.
 #[must_use]
-pub fn bstr_split_utf8<'a>(s: &'a [u8], out_next: &'a [u8]) -> (&'a [u8], &'a [u8]) {
-    let (code, rest) = bstr_decode_utf8(s, s);
+pub fn bstr_split_utf8(s: &[u8]) -> (&[u8], &[u8]) {
+    let (code, rest) = bstr_decode_utf8(s);
     if code < 0 {
-        return (&s[..0], out_next);
+        return (&s[..0], s);
     }
     (bstr_splice(s, 0, (s.len() - rest.len()) as i32), rest)
 }
@@ -412,7 +417,7 @@ fn validate_cutoff(s: &[u8], bytes: i32) -> i32 {
 pub fn bstr_validate_utf8(s: &[u8]) -> i32 {
     let mut s = s;
     while !s.is_empty() {
-        let (res, next) = bstr_decode_utf8(s, s);
+        let (res, next) = bstr_decode_utf8(s);
         s = next;
         if res < 0 {
             let codepoint = s[0] as u32;
@@ -438,7 +443,7 @@ pub fn bstr_sanitize_utf8_latin1(s: &[u8]) -> Option<Vec<u8>> {
     let mut left = s;
     let mut first_ok = 0;
     while !left.is_empty() {
-        let (r, next) = bstr_decode_utf8(left, left);
+        let (r, next) = bstr_decode_utf8(left);
         left = next;
         if r < 0 {
             let pos = s.len() - left.len();
@@ -469,9 +474,8 @@ fn resize_append(s: &mut Vec<u8>, append_min: usize) {
         if append_min < size {
             append_min = size;
         }
-        if size >= usize::MAX / 2 || append_min >= usize::MAX / 2 {
-            std::process::abort();
-        }
+        // The C calls abort() here.
+        assert!(size < usize::MAX / 2 && append_min < usize::MAX / 2);
         s.reserve_exact(size + append_min - s.len());
     }
 }
@@ -502,7 +506,7 @@ pub fn bstr_case_startswith(s: &[u8], prefix: &[u8]) -> bool {
 /// the whole string, so only an empty string ends with the empty suffix.
 #[must_use]
 pub fn bstr_case_endswith(s: &[u8], suffix: &[u8]) -> bool {
-    let end = bstr_cut(s, suffix.len().wrapping_neg() as i32);
+    let end = bstr_cut(s, 0_usize.wrapping_sub(suffix.len()) as i32);
     end.len() == suffix.len() && bstrcasecmp(end, suffix) == 0
 }
 
@@ -546,15 +550,15 @@ pub fn bstr_decode_hex(hex: &[u8]) -> Option<Vec<u8>> {
 
 /// `bstr_find_in_list0`. A NULL-terminated `char **` is a slice of C strings.
 #[must_use]
-pub fn bstr_find_in_list0(s: &[u8], list: &[&[u8]], case_sensitive: bool) -> i32 {
+pub fn bstr_find_in_list0(s: &[u8], strings: &[Vec<u8>], case_sensitive: bool) -> i32 {
     let mut n: i32 = 0;
-    while (n as usize) < list.len() {
-        let matches = if case_sensitive {
-            bstrcmp0(s, list[n as usize]) == 0
+    while (n as usize) < strings.len() {
+        let order = if case_sensitive {
+            bstrcmp0(s, &strings[n as usize])
         } else {
-            bstrcasecmp0(s, list[n as usize]) == 0
+            bstrcasecmp0(s, &strings[n as usize])
         };
-        if matches {
+        if order == 0 {
             return n;
         }
         n += 1;
@@ -565,8 +569,8 @@ pub fn bstr_find_in_list0(s: &[u8], list: &[&[u8]], case_sensitive: bool) -> i32
 
 /// `bstr_in_list0`.
 #[must_use]
-pub fn bstr_in_list0(s: &[u8], list: &[&[u8]]) -> bool {
-    bstr_find_in_list0(s, list, false) != -1
+pub fn bstr_in_list0(s: &[u8], strings: &[Vec<u8>]) -> bool {
+    bstr_find_in_list0(s, strings, false) != -1
 }
 
 /// `bstr_cut`.

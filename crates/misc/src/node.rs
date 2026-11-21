@@ -17,7 +17,7 @@ pub const MPV_FORMAT_BYTE_ARRAY: i32 = 9;
 
 /// `mpv_node_list`: the values of an array or map, and for a map the key of
 /// each value. `num` in C is `values.len()`.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(not(aeneas), derive(Debug, Clone, PartialEq, Eq, Default))]
 pub struct MpvNodeList {
     pub values: Vec<MpvNode>,
     pub keys: Vec<Vec<u8>>,
@@ -28,9 +28,9 @@ pub struct MpvNodeList {
 /// A `double` is held as its bit pattern, so that the type and the code that
 /// only moves values around stay free of floating point. Strings are C
 /// strings and hold no NUL byte.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(not(aeneas), derive(Debug, Clone, PartialEq, Eq, Default))]
 pub enum MpvNode {
-    #[default]
+    #[cfg_attr(not(aeneas), default)]
     None,
     String(Vec<u8>),
     Flag(i32),
@@ -43,8 +43,8 @@ pub enum MpvNode {
 
 /// The `format` field of a node.
 #[must_use]
-pub fn node_format(node: &MpvNode) -> i32 {
-    match node {
+pub fn node_format(n: &MpvNode) -> i32 {
+    match n {
         MpvNode::None => MPV_FORMAT_NONE,
         MpvNode::String(_) => MPV_FORMAT_STRING,
         MpvNode::Flag(_) => MPV_FORMAT_FLAG,
@@ -233,18 +233,19 @@ pub fn node_map_bget<'a>(src: &'a MpvNode, key: &[u8]) -> Option<&'a MpvNode> {
     None
 }
 
-/// The entry loop of `equal_mpv_value` for arrays and maps, from index `n`.
-fn equal_lists(l_a: &MpvNodeList, l_b: &MpvNodeList, is_map: bool, n: usize) -> bool {
-    if n >= l_a.values.len() {
-        return true;
+/// The entry loop of `equal_mpv_value` for arrays and maps.
+fn equal_lists(l_a: &MpvNodeList, l_b: &MpvNodeList, is_map: bool) -> bool {
+    let mut n = 0;
+    while n < l_a.values.len() {
+        if is_map && strcmp(&l_a.keys[n], &l_b.keys[n]) != 0 {
+            return false;
+        }
+        if !equal_mpv_node(&l_a.values[n], &l_b.values[n]) {
+            return false;
+        }
+        n += 1;
     }
-    if is_map && strcmp(&l_a.keys[n], &l_b.keys[n]) != 0 {
-        return false;
-    }
-    if !equal_mpv_node(&l_a.values[n], &l_b.values[n]) {
-        return false;
-    }
-    equal_lists(l_a, l_b, is_map, n + 1)
+    true
 }
 
 /// `equal_mpv_value`.
@@ -285,13 +286,13 @@ pub fn equal_mpv_value(a: &MpvNode, b: &MpvNode, format: i32) -> bool {
             if l_a.values.len() != l_b.values.len() {
                 return false;
             }
-            equal_lists(l_a, l_b, false, 0)
+            equal_lists(l_a, l_b, false)
         }
         (MpvNode::NodeMap(l_a), MpvNode::NodeMap(l_b)) if format == MPV_FORMAT_NODE_MAP => {
             if l_a.values.len() != l_b.values.len() {
                 return false;
             }
-            equal_lists(l_a, l_b, true, 0)
+            equal_lists(l_a, l_b, true)
         }
         _ => unreachable!("format does not match the nodes"),
     }

@@ -2,7 +2,7 @@
 
 use std::ffi::c_char;
 
-use rmpv_misc::clib as port;
+use rmpv_misc::{cfloat, clib as port};
 use rmpv_misc_difftest::input::{self, cstring};
 use rmpv_misc_difftest::{c, sign};
 
@@ -46,7 +46,7 @@ fn strtod() {
             &raw mut consumed,
             &raw mut erange
         ));
-        let got = port::strtod(&s);
+        let got = cfloat::strtod(&s);
         let text = String::from_utf8_lossy(&s);
         assert_eq!(
             (want.to_bits(), consumed, erange != 0),
@@ -125,7 +125,7 @@ fn formatting() {
             buf.as_mut_ptr().cast(),
             buf.len()
         ));
-        assert_eq!(&buf[..len as usize], port::format_f(bits), "{bits:#x}");
+        assert_eq!(&buf[..len as usize], cfloat::format_f(bits), "{bits:#x}");
     });
     run("libc printf PRId64", 65, N, |rng| {
         let v = match rng.below(3) {
@@ -135,6 +135,6 @@ fn formatting() {
         };
         let mut buf = [0_u8; 32];
         let len = c!(dt_format_d(v, buf.as_mut_ptr().cast(), buf.len()));
-        assert_eq!(&buf[..len as usize], port::format_d(v), "{v}");
+        assert_eq!(&buf[..len as usize], cfloat::format_d(v), "{v}");
     });
 }

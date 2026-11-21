@@ -21,6 +21,8 @@ unused_crate_dependencies = "warn"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
+# `--cfg aeneas` is set when Charon reads the crate; see src/lib.rs.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aeneas)'] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
@@ -42,6 +44,7 @@ unwrap_used = "warn"
 
 # Relaxed for this crate.
 indexing_slicing = "allow"
+byte_char_slices = "allow"
 cast_lossless = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
@@ -51,6 +54,8 @@ comparison_chain = "allow"
 manual_assert_eq = "allow"
 manual_div_ceil = "allow"
 manual_ilog2 = "allow"
+manual_let_else = "allow"
+manual_map = "allow"
 manual_is_power_of_two = "allow"
 manual_midpoint = "allow"
 manual_range_contains = "allow"

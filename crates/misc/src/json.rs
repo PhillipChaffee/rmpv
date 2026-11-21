@@ -7,7 +7,8 @@
 //! buffer.
 
 use crate::bstr::{bstr_xappend, bstr0};
-use crate::clib::{cstr_at, format_d, format_f, isfinite, strlen, strncmp, strtod, strtoll};
+use crate::cfloat::{format_d, format_f, strtod};
+use crate::clib::{cstr_at, isfinite, strlen, strncmp, strtoll};
 use crate::common::mp_append_escaped_string;
 use crate::ctype::{mp_isalnum, mp_isalpha};
 use crate::node::{MpvNode, MpvNodeList};
@@ -255,7 +256,7 @@ pub fn write_json_str(b: &mut Vec<u8>, s: &[u8]) {
         if c == b'"' {
             bstr_xappend(b, b"\\\"");
         } else if c == b'\\' {
-            bstr_xappend(b, b"\\\\");
+            bstr_xappend(b, &[b'\\', b'\\']);
         } else if special_escape(c) != 0 {
             bstr_xappend(b, &[b'\\', special_escape(c)]);
         } else {
@@ -291,21 +292,21 @@ pub fn add_indent(b: &mut Vec<u8>, indent: i32) {
     }
 }
 
-/// The entry loop of `json_append` for arrays and objects, from index `n`.
-fn append_list(b: &mut Vec<u8>, list: &MpvNodeList, is_obj: bool, next_indent: i32, n: usize) {
-    if n >= list.values.len() {
-        return;
+/// The entry loop of `json_append` for arrays and objects.
+fn append_list(b: &mut Vec<u8>, list: &MpvNodeList, is_obj: bool, next_indent: i32) {
+    let mut n = 0;
+    while n < list.values.len() {
+        if n != 0 {
+            bstr_xappend(b, b",");
+        }
+        add_indent(b, next_indent);
+        if is_obj {
+            write_json_str(b, &list.keys[n]);
+            bstr_xappend(b, b":");
+        }
+        json_append(b, &list.values[n], next_indent);
+        n += 1;
     }
-    if n != 0 {
-        bstr_xappend(b, b",");
-    }
-    add_indent(b, next_indent);
-    if is_obj {
-        write_json_str(b, &list.keys[n]);
-        bstr_xappend(b, b":");
-    }
-    json_append(b, &list.values[n], next_indent);
-    append_list(b, list, is_obj, next_indent, n + 1);
 }
 
 /// `json_append`: appends `src` as JSON. `indent < 0` writes one line;
@@ -351,7 +352,7 @@ pub fn json_append(b: &mut Vec<u8>, src: &MpvNode, indent: i32) -> i32 {
             let is_obj = matches!(src, MpvNode::NodeMap(_));
             bstr_xappend(b, if is_obj { b"{" } else { b"[" });
             let next_indent = if indent >= 0 { indent + 1 } else { -1 };
-            append_list(b, list, is_obj, next_indent, 0);
+            append_list(b, list, is_obj, next_indent);
             add_indent(b, indent);
             bstr_xappend(b, if is_obj { b"}" } else { b"]" });
             0

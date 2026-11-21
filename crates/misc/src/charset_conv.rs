@@ -25,8 +25,38 @@ pub fn mp_charset_is_utf16(user_cp: &[u8]) -> bool {
     bstr_case_startswith(s, b"utf16") || bstr_case_startswith(s, b"utf-16")
 }
 
-const UTF_BOM: [&[u8]; 3] = [b"\xEF\xBB\xBF", b"\xFF\xFE", b"\xFE\xFF"];
-const UTF_ENC: [&[u8]; 3] = [b"utf-8", b"utf-16le", b"utf-16be"];
+// Strings the functions below return. They are statics because Aeneas
+// treats a byte-string literal as a local value, which cannot be returned by
+// reference.
+static BOM_UTF8: [u8; 3] = [0xEF, 0xBB, 0xBF];
+static BOM_UTF16LE: [u8; 2] = [0xFF, 0xFE];
+static BOM_UTF16BE: [u8; 2] = [0xFE, 0xFF];
+static ENC_UTF8: [u8; 5] = *b"utf-8";
+static ENC_UTF16LE: [u8; 8] = *b"utf-16le";
+static ENC_UTF16BE: [u8; 8] = *b"utf-16be";
+static ENC_UTF8_BROKEN: [u8; 12] = *b"UTF-8-BROKEN";
+
+/// `utf_bom[n]`.
+fn utf_bom(n: usize) -> &'static [u8] {
+    if n == 0 {
+        &BOM_UTF8
+    } else if n == 1 {
+        &BOM_UTF16LE
+    } else {
+        &BOM_UTF16BE
+    }
+}
+
+/// `utf_enc[n]`.
+fn utf_enc(n: usize) -> &'static [u8] {
+    if n == 0 {
+        &ENC_UTF8
+    } else if n == 1 {
+        &ENC_UTF16LE
+    } else {
+        &ENC_UTF16BE
+    }
+}
 
 /// `ms_bom_guess`: the encoding a byte order mark at the start of `buf`
 /// names.
@@ -34,8 +64,8 @@ const UTF_ENC: [&[u8]; 3] = [b"utf-8", b"utf-16le", b"utf-16be"];
 pub fn ms_bom_guess(buf: &[u8]) -> Option<&'static [u8]> {
     let mut n = 0;
     while n < 3 {
-        if bstr_startswith0(buf, UTF_BOM[n]) {
-            return Some(UTF_ENC[n]);
+        if bstr_startswith0(buf, utf_bom(n)) {
+            return Some(utf_enc(n));
         }
         n += 1;
     }
@@ -58,11 +88,11 @@ pub fn mp_charset_guess<'a>(buf: &[u8], user_cp: &'a [u8], flags: i32) -> &'a [u
 
     let r = bstr_validate_utf8(buf);
     if r >= 0 || (r > -8 && (flags & MP_ICONV_ALLOW_CUTOFF) != 0) {
-        return b"utf-8";
+        return &ENC_UTF8;
     }
 
     if strcasecmp(user_cp, b"auto") == 0 {
-        return b"UTF-8-BROKEN";
+        return &ENC_UTF8_BROKEN;
     }
     user_cp
 }
