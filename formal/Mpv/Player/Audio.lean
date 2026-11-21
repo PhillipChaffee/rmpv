@@ -63,7 +63,7 @@ structure Gain where
 
 /-- A gain in dB as a factor. The result is whatever the C library's `pow`
 returns. -/
--- mpv-cover: player/audio.c db_gain paths=all hash=e4122fc2da3e
+-- mpv-cover: player/audio.c db_gain paths=all hash=9d8b62245eb7
 def dbGain (db : Float) : Float := Float.pow 10.0 (db / 20.0)
 
 /-- The replaygain data that applies: the track's, unless replaygain is off. -/
@@ -72,7 +72,7 @@ def activeReplaygain (g : Gain) : Option Replaygain :=
 
 /-- The replaygain factor: the track's or album's gain plus the preamp, limited
 so that the peak does not clip, or the fallback gain when no data applies. -/
--- mpv-cover: player/audio.c compute_replaygain paths=all hash=f6f50e24aae9
+-- mpv-cover: player/audio.c compute_replaygain paths=all hash=4577bb577708
 def computeReplaygain (g : Gain) : Float32 :=
   match activeReplaygain g with
   | some rg =>
@@ -91,7 +91,7 @@ def computeReplaygain (g : Gain) : Float32 :=
 
 /-- The factor applied to every audio sample: the cube of the volume, times
 the replaygain factor and the gain option, or 0 when muted. -/
--- mpv-cover: player/audio.c audio_get_gain paths=all hash=cfded804efbe
+-- mpv-cover: player/audio.c audio_get_gain paths=all hash=c138c0624faf
 def audioGetGain (g : Gain) : Float32 :=
   let volume := g.softvolVolume.toFloat / 100.0
   let gain := (if volume > 0 then volume else 0).toFloat32
@@ -102,7 +102,7 @@ def audioGetGain (g : Gain) : Float32 :=
 
 /-- The timestamp at the start of the audio written to the output so far, or
 `nopts` without an output chain. -/
--- mpv-cover: player/audio.c written_audio_pts paths=all hash=3e61b9e64be4
+-- mpv-cover: player/audio.c written_audio_pts paths=all hash=a3809400b6a8
 def writtenAudioPts (c : Ctx) : Float :=
   match c.aoChain with
   | some chain => chain.lastOutPts
@@ -111,7 +111,7 @@ def writtenAudioPts (c : Ctx) : Float :=
 /-- The timestamp of the audio being heard now: the written one less what the
 output still holds. `aoDelay` is what `ao_get_delay` in `audio/out/buffer.c`
 returns, which the model does not cover yet. -/
--- mpv-cover: player/audio.c playing_audio_pts paths=all hash=406977672d2a
+-- mpv-cover: player/audio.c playing_audio_pts paths=all hash=06e01a279b8b
 def playingAudioPts (aoDelay : Float) (c : Ctx) : Float :=
   let pts := writtenAudioPts c
   if pts == nopts || !c.ao then pts else pts - c.audioSpeed * aoDelay

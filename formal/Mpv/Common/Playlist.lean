@@ -50,7 +50,7 @@ def streamOriginDirect : Int := 4
 
 /-- `fileUrlToFilename` and `normalizePath` stand for the callees
 `mp_file_url_to_filename` and `mp_normalize_path`, which live in other files. -/
--- mpv-cover: common/playlist.c playlist_entry_new paths=all hash=cba19bb74e96
+-- mpv-cover: common/playlist.c playlist_entry_new paths=all hash=bc763a57611e
 def entryNew (fileUrlToFilename : String → Option String) (normalizePath : String → String)
     (filename : String) : Entry :=
   let path := match fileUrlToFilename filename with
@@ -61,32 +61,32 @@ def entryNew (fileUrlToFilename : String → Option String) (normalizePath : Str
     originalIndex := -1, reserved := 0, streamFlags := streamOriginDirect }
 
 -- Path 1 only grows the array.
--- mpv-cover: common/playlist.c playlist_entry_add_param paths=all unobservable=1 hash=a6ebf8c8cb87
+-- mpv-cover: common/playlist.c playlist_entry_add_param paths=all unobservable=1 hash=f16c5b49aeb1
 def entryAddParam (e : Entry) (name value : String) : Entry :=
   { e with params := e.params ++ [(name, value)] }
 
--- mpv-cover: common/playlist.c playlist_entry_add_params paths=all hash=f5a3571d79b3
+-- mpv-cover: common/playlist.c playlist_entry_add_params paths=all hash=404214a643bf
 def entryAddParams (e : Entry) (params : List (String × String)) : Entry :=
   params.foldl (fun e p => entryAddParam e p.1 p.2) e
 
--- mpv-cover: common/playlist.c playlist_set_params paths=all hash=59cf4f1cb833
+-- mpv-cover: common/playlist.c playlist_set_params paths=all hash=018bb5c90520
 def setParams (pl : Playlist) (params : List (String × String)) : Playlist :=
   { pl with entries := pl.entries.map fun e => entryAddParams { e with params := [] } params }
 
--- mpv-cover: common/playlist.c playlist_entry_count paths=all hash=110c2efbe62f
+-- mpv-cover: common/playlist.c playlist_entry_count paths=all hash=f3806d9e16ea
 def entryCount (pl : Playlist) : Int := pl.entries.length
 
--- mpv-cover: common/playlist.c playlist_entry_from_index paths=all hash=54c08dd62920
+-- mpv-cover: common/playlist.c playlist_entry_from_index paths=all hash=4a536e9f24c4
 def entryFromIndex (pl : Playlist) (index : Int) : Option Entry :=
   if 0 ≤ index ∧ index < pl.entries.length then pl.entries[index.toNat]? else none
 
--- mpv-cover: common/playlist.c playlist_entry_to_index paths=all hash=0aa9a76a75f9
+-- mpv-cover: common/playlist.c playlist_entry_to_index paths=all hash=dd3ad5325329
 def entryToIndex (e : Option Entry) : Int :=
   match e with
   | none => -1
   | some e => if !e.attached then -1 else e.plIndex
 
--- mpv-cover: common/playlist.c playlist_update_indexes paths=all hash=ca8fa75c6842
+-- mpv-cover: common/playlist.c playlist_update_indexes paths=all hash=913cb7a7e7c1
 def updateIndexes (pl : Playlist) (start stop : Int) : Playlist :=
   let s := max start 0
   let e := if stop < 0 then (pl.entries.length : Int) else min stop pl.entries.length
@@ -94,7 +94,7 @@ def updateIndexes (pl : Playlist) (start stop : Int) : Playlist :=
       if s ≤ (n : Int) ∧ (n : Int) < e then { x with plIndex := n } else x }
 
 -- Path 10 only grows the array.
--- mpv-cover: common/playlist.c playlist_insert_at paths=all unobservable=10 hash=5b59e2deca02
+-- mpv-cover: common/playlist.c playlist_insert_at paths=all unobservable=10 hash=4ec8fe004600
 def insertAt (pl : Playlist) (add : Entry) (at_ : Option Entry) : Playlist :=
   let index : Int := match at_ with
     | some a => a.plIndex
@@ -103,18 +103,18 @@ def insertAt (pl : Playlist) (add : Entry) (at_ : Option Entry) : Playlist :=
   let pl' := { pl with entries := pl.entries.insertIdx index.toNat add', idAlloc := pl.idAlloc + 1 }
   updateIndexes pl' index pl'.entries.length
 
--- mpv-cover: common/playlist.c playlist_entry_get_rel paths=all hash=5fff8931ad8f
+-- mpv-cover: common/playlist.c playlist_entry_get_rel paths=all hash=aae4ee6b4cb0
 def entryGetRel (pl : Playlist) (e : Entry) (direction : Int) : Option Entry :=
   if !e.attached then none else entryFromIndex pl (e.plIndex + direction)
 
 /-- `none` means the entry was freed. -/
--- mpv-cover: common/playlist.c playlist_entry_unref paths=all hash=6a64ec77538e
+-- mpv-cover: common/playlist.c playlist_entry_unref paths=all hash=db7fa2d6e029
 def entryUnref (e : Entry) : Option Entry :=
   let e' := { e with reserved := e.reserved - 1 }
   if e'.reserved < 0 then none else some e'
 
 /-- Returns the playlist and the removed entry, or `none` if removing it freed it. -/
--- mpv-cover: common/playlist.c playlist_remove paths=all hash=ba66035fec9a
+-- mpv-cover: common/playlist.c playlist_remove paths=all hash=bc3bd697e2c4
 def remove (pl : Playlist) (entry : Entry) : Playlist × Option Entry :=
   let pl1 := if pl.current = some entry.id then
       { pl with current := (entryGetRel pl entry 1).map (·.id), currentWasReplaced := true }
@@ -138,19 +138,19 @@ def removeBackwards (keepCurrent : Bool) (pl : Playlist) : Nat → Playlist × L
         let rest := removeBackwards keepCurrent removed.1 n
         (rest.1, removed.2.toList ++ rest.2)
 
--- mpv-cover: common/playlist.c playlist_clear paths=all hash=954fde12757f
+-- mpv-cover: common/playlist.c playlist_clear paths=all hash=7f28b9ff36c9
 def clear (pl : Playlist) : Playlist × List Entry :=
   let removed := removeBackwards false pl pl.entries.length
   ({ removed.1 with currentWasReplaced := false, playlistCompleted := false,
                     playlistStarted := false, playlistDir := none }, removed.2)
 
--- mpv-cover: common/playlist.c playlist_clear_except_current paths=all hash=946031b2f093
+-- mpv-cover: common/playlist.c playlist_clear_except_current paths=all hash=7ebcbffc32c2
 def clearExceptCurrent (pl : Playlist) : Playlist × List Entry :=
   let removed := removeBackwards true pl pl.entries.length
   ({ removed.1 with playlistCompleted := false, playlistStarted := false }, removed.2)
 
 -- Path 12 only grows the array.
--- mpv-cover: common/playlist.c playlist_move paths=all unobservable=12 hash=6ddef12883c0
+-- mpv-cover: common/playlist.c playlist_move paths=all unobservable=12 hash=0ba4d28b8cd4
 def move (pl : Playlist) (entry : Entry) (at_ : Option Entry) : Playlist :=
   if some entry = at_ then pl else
   let index : Int := match at_ with
@@ -161,20 +161,20 @@ def move (pl : Playlist) (entry : Entry) (at_ : Option Entry) : Playlist :=
   let pl' := { pl with entries := inserted.eraseIdx oldIndex.toNat }
   updateIndexes pl' (min (index - 1) (oldIndex - 1)) (max (index + 1) (oldIndex + 1))
 
--- mpv-cover: common/playlist.c playlist_append_file paths=all hash=1f6e2198d6f2
+-- mpv-cover: common/playlist.c playlist_append_file paths=all hash=d74956982b0d
 def appendFile (fileUrlToFilename : String → Option String) (normalizePath : String → String)
     (pl : Playlist) (filename : String) : Playlist :=
   insertAt pl (entryNew fileUrlToFilename normalizePath filename) none
 
--- mpv-cover: common/playlist.c playlist_populate_playlist_path paths=all hash=0b5df5edc6b4
+-- mpv-cover: common/playlist.c playlist_populate_playlist_path paths=all hash=ba11cc8002dd
 def populatePlaylistPath (pl : Playlist) (path : String) : Playlist :=
   { pl with entries := pl.entries.map fun e => { e with playlistPath := some path } }
 
--- mpv-cover: common/playlist.c playlist_set_stream_flags paths=all hash=90b6b310210f
+-- mpv-cover: common/playlist.c playlist_set_stream_flags paths=all hash=c329abd605e3
 def setStreamFlags (pl : Playlist) (flags : Int) : Playlist :=
   { pl with entries := pl.entries.map fun e => { e with streamFlags := flags } }
 
--- mpv-cover: common/playlist.c playlist_set_current paths=all hash=8663e976334d
+-- mpv-cover: common/playlist.c playlist_set_current paths=all hash=7798e361b4c5
 def setCurrent (pl : Playlist) : Playlist :=
   match pl.playlistDir with
   | none => pl
@@ -183,15 +183,15 @@ def setCurrent (pl : Playlist) : Playlist :=
     | some e => { pl with current := some e.id }
     | none => pl
 
--- mpv-cover: common/playlist.c playlist_get_first paths=all hash=dbb2f8fcedea
+-- mpv-cover: common/playlist.c playlist_get_first paths=all hash=2d8dc5c29713
 def getFirst (pl : Playlist) : Option Entry :=
   if pl.entries.length ≠ 0 then pl.entries[0]? else none
 
--- mpv-cover: common/playlist.c playlist_get_last paths=all hash=f9e91f29ed9b
+-- mpv-cover: common/playlist.c playlist_get_last paths=all hash=335505d65ea1
 def getLast (pl : Playlist) : Option Entry :=
   if pl.entries.length ≠ 0 then pl.entries[pl.entries.length - 1]? else none
 
--- mpv-cover: common/playlist.c playlist_get_next paths=all hash=e80538901518
+-- mpv-cover: common/playlist.c playlist_get_next paths=all hash=97ab285258b3
 def getNext (pl : Playlist) (direction : Int) : Option Entry :=
   match pl.current with
   | none =>
@@ -215,7 +215,7 @@ def swap (l : List Entry) (i j : Nat) : List Entry :=
 
 /-- `rand k min max` stands for the result of the `k`-th call
 `mp_rand_in_range32(&s, min, max)`, which lives in `misc/random.c`. -/
--- mpv-cover: common/playlist.c playlist_shuffle paths=all hash=576516b0175a
+-- mpv-cover: common/playlist.c playlist_shuffle paths=all hash=1ac3af6e0b61
 def shuffle (rand : Nat → Nat → Nat → Nat) (pl : Playlist) : Playlist :=
   let marked := pl.entries.mapIdx fun n e => { e with originalIndex := n }
   let swapped := (List.range (marked.length - 1)).foldl
@@ -225,7 +225,7 @@ def shuffle (rand : Nat → Nat → Nat → Nat) (pl : Playlist) : Playlist :=
 /-- C `CMP_INT`. -/
 def cmpInt (a b : Int) : Int := if a = b then 0 else if a > b then 1 else -1
 
--- mpv-cover: common/playlist.c cmp_unshuffle paths=all hash=db83bd73a93d
+-- mpv-cover: common/playlist.c cmp_unshuffle paths=all hash=f4593622a6e1
 def cmpUnshuffle (a b : Entry) : Int :=
   if a.originalIndex ≥ 0 ∧ a.originalIndex ≠ b.originalIndex then
     cmpInt a.originalIndex b.originalIndex
@@ -235,7 +235,7 @@ def cmpUnshuffle (a b : Entry) : Int :=
 comparison is a consistent total order on the array. `cmpUnshuffle` is one
 exactly when no entry with `original_index < 0` sits after an entry with
 `original_index ≥ 0`. -/
--- mpv-cover: common/playlist.c playlist_unshuffle paths=all hash=7915cb6c1d73
+-- mpv-cover: common/playlist.c playlist_unshuffle paths=all hash=3532f5551af0
 def unshuffle (sort : (Entry → Entry → Int) → List Entry → List Entry) (pl : Playlist) :
     Playlist :=
   let sorted := if pl.entries.length ≠ 0 then sort cmpUnshuffle pl.entries else pl.entries
@@ -254,7 +254,7 @@ def firstWithPath (pl : Playlist) (path : String) : Nat → Entry → Entry
 /-- `stripTrailingSeparator` stands for `mp_path_strip_trailing_separator` in
 `misc/path_utils.c`. `pl` is the playlist `entry` is in. A NULL
 `current_playlist_path` is `none`; C reads it as the empty string. -/
--- mpv-cover: common/playlist.c playlist_get_first_in_same_playlist paths=all hash=e34dd7dd3568
+-- mpv-cover: common/playlist.c playlist_get_first_in_same_playlist paths=all hash=55564e6a9240
 def getFirstInSamePlaylist (stripTrailingSeparator : String → String) (pl : Playlist)
     (entry : Option Entry) (currentPlaylistPath : Option String) : Option Entry :=
   match entry with
@@ -281,7 +281,7 @@ def skipCurrentPlaylist (pl : Playlist) (currentPath : Option String) (direction
 no current entry that is a NULL dereference, unless `playlist_get_next` returns
 NULL, or `direction > 0` and the entry it returns has no playlist path. The
 model describes mpv only outside that case. -/
--- mpv-cover: common/playlist.c playlist_get_first_in_next_playlist paths=all hash=f002fa38c1ea
+-- mpv-cover: common/playlist.c playlist_get_first_in_next_playlist paths=all hash=37e5f7480a10
 def getFirstInNextPlaylist (stripTrailingSeparator : String → String) (pl : Playlist)
     (direction : Int) : Option Entry :=
   match getNext pl direction with
@@ -296,7 +296,7 @@ def getFirstInNextPlaylist (stripTrailingSeparator : String → String) (pl : Pl
 /-- Returns the destination, the emptied source, and the C return value. C
 leaves `source_pl->current` pointing at its old entry, which now has its new
 `id`. Path 5 only grows the array. -/
--- mpv-cover: common/playlist.c playlist_transfer_entries_to paths=all unobservable=5 hash=e4ff7d64587f
+-- mpv-cover: common/playlist.c playlist_transfer_entries_to paths=all unobservable=5 hash=9d2c4074f0ba
 def transferEntriesTo (pl : Playlist) (dstIndex : Int) (source : Playlist) :
     Playlist × Playlist × Int :=
   let moved := source.entries.mapIdx fun n e =>
@@ -315,7 +315,7 @@ def transferEntriesTo (pl : Playlist) (dstIndex : Int) (source : Playlist) :
        (source.entries.findIdx? (·.id = c)).map (pl.idAlloc + · + 1) },
    first)
 
--- mpv-cover: common/playlist.c playlist_transfer_entries paths=all hash=fd28ee17dba3
+-- mpv-cover: common/playlist.c playlist_transfer_entries paths=all hash=b657edce44bf
 def transferEntries (pl source : Playlist) : Playlist × Playlist × Int :=
   let addAt : Int := match pl.current.bind fun c => pl.entries.find? (·.id = c) with
     | none => pl.entries.length
@@ -323,7 +323,7 @@ def transferEntries (pl source : Playlist) : Playlist × Playlist × Int :=
       if pl.currentWasReplaced then current.plIndex + 1 + 1 else current.plIndex + 1
   transferEntriesTo pl addAt source
 
--- mpv-cover: common/playlist.c playlist_append_entries paths=all hash=905608b24dbc
+-- mpv-cover: common/playlist.c playlist_append_entries paths=all hash=999e328440cb
 def appendEntries (pl source : Playlist) : Playlist × Playlist × Int :=
   transferEntriesTo pl pl.entries.length source
 
@@ -342,7 +342,7 @@ structure Demuxer where
 `demux/demux.c`; `none` is a NULL demuxer. The demuxer and its emptied playlist
 are freed, so only the new playlist is returned. Paths 4 to 9 only choose which
 message to log; the file type is read for nothing else. -/
--- mpv-cover: common/playlist.c playlist_parse_file paths=0,1,2,3 unobservable=4,5,6,7,8,9 hash=2f4861660fd5
+-- mpv-cover: common/playlist.c playlist_parse_file paths=0,1,2,3 unobservable=4,5,6,7,8,9 hash=8d8c69321ea1
 def parseFile (getUserPath : String → String)
     (demuxOpenUrl : String → String → Int → Option Demuxer) (file : String) : Option Playlist :=
   match demuxOpenUrl (getUserPath file) "playlist" streamOriginDirect with

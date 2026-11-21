@@ -65,14 +65,14 @@ structure Ctx where
   cacheBuffer : Int
 
 /-- The duration, or `nopts` when there is no demuxer or the duration is unknown. -/
--- mpv-cover: player/playloop.c get_time_length paths=all hash=010269b0e970
+-- mpv-cover: player/playloop.c get_time_length paths=all hash=ddbffa1985d3
 def getTimeLength (c : Ctx) : Float :=
   match c.demuxer with
   | some d => if d.duration ≥ 0 then d.duration else nopts
   | none => nopts
 
 /-- The approximate time of the first frame played in direction `dir`. -/
--- mpv-cover: player/playloop.c get_start_time paths=all hash=b11d82a35c7b
+-- mpv-cover: player/playloop.c get_start_time paths=all hash=8220dc2e47a2
 def getStartTime (c : Ctx) (dir : Int) : Float :=
   match c.demuxer with
   | none => 0
@@ -86,7 +86,7 @@ def getStartTime (c : Ctx) (dir : Int) : Float :=
 
 /-- The playback position, or the last seek target while no frame has been
 shown since the seek. -/
--- mpv-cover: player/playloop.c get_current_time paths=all hash=665b45523532
+-- mpv-cover: player/playloop.c get_current_time paths=all hash=586d4b9d00b3
 def getCurrentTime (c : Ctx) : Float :=
   match c.demuxer with
   | none => nopts
@@ -96,7 +96,7 @@ def getCurrentTime (c : Ctx) : Float :=
 
 /-- `getCurrentTime` for display: a seek target is clamped to the file, and no
 known time is negative. -/
--- mpv-cover: player/playloop.c get_playback_time paths=all hash=4824d67c5215
+-- mpv-cover: player/playloop.c get_playback_time paths=all hash=176d510d0023
 def getPlaybackTime (c : Ctx) : Float :=
   let cur := getCurrentTime c
   let cur :=
@@ -109,7 +109,7 @@ def getPlaybackTime (c : Ctx) : Float :=
 /-- The playback position as a ratio from 0 to 1, or -1 when unknown.
 `playStart` and `playEnd` are `get_play_start_pts` and `get_play_end_pts` from
 `player/misc.c`, which the model does not cover yet. -/
--- mpv-cover: player/playloop.c get_current_pos_ratio paths=all hash=c2bf402024cd
+-- mpv-cover: player/playloop.c get_current_pos_ratio paths=all hash=23a4685954fe
 def getCurrentPosRatio (playStart playEnd : Ctx → Float) (c : Ctx) (useRange : Bool) :
     Float :=
   match c.demuxer with
@@ -142,7 +142,7 @@ def chaptersStarted (c : Ctx) (time : Float) : Nat :=
 
 /-- The index of the current chapter: -2 without chapters, -1 before the first.
 A chapter seek that is still pending overrides the position. -/
--- mpv-cover: player/playloop.c get_current_chapter paths=all hash=9a1059cd2241
+-- mpv-cover: player/playloop.c get_current_chapter paths=all hash=ef6243bbf31d
 def getCurrentChapter (c : Ctx) : Int :=
   if c.chapters.size = 0 then -2 else
   let i : Int := chaptersStarted c (getCurrentTime c)
@@ -150,18 +150,18 @@ def getCurrentChapter (c : Ctx) : Int :=
 
 /-- The start of a chapter; chapter -1 starts at 0. `nopts` when there is no
 such chapter. -/
--- mpv-cover: player/playloop.c chapter_start_time paths=all hash=d50aac14c3f3
+-- mpv-cover: player/playloop.c chapter_start_time paths=all hash=5ec6a0930aaf
 def chapterStartTime (c : Ctx) (chapter : Int) : Float :=
   if chapter = -1 then 0
   else if h : 0 ≤ chapter ∧ chapter < c.chapters.size then
     c.chapters[chapter.toNat]'(by omega)
   else nopts
 
--- mpv-cover: player/playloop.c get_chapter_count paths=all hash=eb77a885a615
+-- mpv-cover: player/playloop.c get_chapter_count paths=all hash=f6287e9c9fba
 def getChapterCount (c : Ctx) : Int := c.chapters.size
 
 /-- The cache fill percentage, or -1 without a demuxer. -/
--- mpv-cover: player/playloop.c get_cache_buffering_percentage paths=all hash=9abb84aae9df
+-- mpv-cover: player/playloop.c get_cache_buffering_percentage paths=all hash=d3eb3542f162
 def getCacheBufferingPercentage (c : Ctx) : Int :=
   if c.demuxer.isSome then c.cacheBuffer else -1
 

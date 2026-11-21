@@ -116,7 +116,7 @@ structure Ctx where
 audio position and the video timestamp `vPts`. The step is a tenth of the
 difference, limited to the pts-correction option or to a share of
 `frameTime`. -/
--- mpv-cover: player/video.c adjust_sync paths=all hash=a8c5411ec911
+-- mpv-cover: player/video.c adjust_sync paths=all hash=d24ba6f51b7e
 def adjustSync (c : Ctx) (vPts frameTime : Float) : Ctx :=
   if c.audioStatus ≠ statusPlaying then c else
   let aPts := writtenAudioPts c.audio + c.audioDelay - c.delay
@@ -139,7 +139,7 @@ unless both streams are playing, the video is not sparse and both positions
 are known. A difference above half a second sets `dropMessageShown`, which is
 where mpv prints its desync warning once. `aoDelay` is what `ao_get_delay`
 returns. -/
--- mpv-cover: player/video.c update_av_diff paths=all hash=a667ca1f0c71
+-- mpv-cover: player/video.c update_av_diff paths=all hash=51947a524019
 def updateAvDiff (aoDelay : Float) (c : Ctx) (offset : Float) : Ctx :=
   if c.audioStatus ≠ statusPlaying ∨ c.videoStatus ≠ statusPlaying then
     { c with lastAvDifference := 0 }
@@ -167,7 +167,7 @@ def meanOr (durations : List Float) (otherwise : Float) : Float :=
 
 /-- The mean smoothed duration of the past frames, or 0 when none has a
 positive one. -/
--- mpv-cover: player/video.c calc_average_frame_duration paths=all hash=9f3d0785dd93
+-- mpv-cover: player/video.c calc_average_frame_duration paths=all hash=190112af3b2a
 def calcAverageFrameDuration (c : Ctx) : Float :=
   meanOr (positiveDurations c) 0
 
@@ -181,14 +181,14 @@ def speedForFactor (ratio maxChange : Float) (factor : Nat) : Option Float :=
 number of vsyncs of length `vsync`, for the smallest `factor` from 1 to
 `maxFactor` that needs a change of at most `maxChange`. -1 when there is
 none. -/
--- mpv-cover: player/video.c calc_best_speed paths=all hash=90e00f8065d4
+-- mpv-cover: player/video.c calc_best_speed paths=all hash=b6fea294b72d
 def calcBestSpeed (vsync frame maxChange : Float) (maxFactor : Int) : Float :=
   let ratio := frame / vsync
   ((List.range maxFactor.toNat).findSome? fun n => speedForFactor ratio maxChange (n + 1)).getD (-1)
 
 /-- The mean of `calcBestSpeed` over the past frames it finds a speed for, or
 1 when it finds none. -/
--- mpv-cover: player/video.c find_best_speed paths=all hash=fa70c59fa73f
+-- mpv-cover: player/video.c find_best_speed paths=all hash=a4b8f1081443
 def findBestSpeed (c : Ctx) (vsync : Float) : Float :=
   let speeds := (positiveDurations c).filterMap fun dur =>
     let best := calcBestSpeed vsync (dur / c.playbackSpeed) (c.syncMaxVideoChange / 100)
@@ -200,7 +200,7 @@ def findBestSpeed (c : Ctx) (vsync : Float) : Float :=
 cannot be resampled. `aoFormat` is the format `ao_get_format` in
 `audio/out/ao.c` reports and `isPcm` is `af_fmt_is_pcm` in `audio/format.c`;
 the model covers neither yet. -/
--- mpv-cover: player/video.c using_spdif_passthrough paths=all hash=44b0e075f6af
+-- mpv-cover: player/video.c using_spdif_passthrough paths=all hash=f7fabd671040
 def usingSpdifPassthrough (aoFormat : Int) (isPcm : Int → Bool) (c : Ctx) : Bool :=
   match c.audio.aoChain with
   | some chain => if chain.ao then !isPcm aoFormat else false
@@ -215,7 +215,7 @@ towards the value that lets the filtered difference decay.
 C reads `video_out->opts` without a test, so the model describes mpv only
 while `video_out` is not `NULL`. Its one caller, `handle_display_sync_frame`,
 reads the same field first, so it cannot make the call with `NULL`. -/
--- mpv-cover: player/video.c adjust_audio_drift_compensation paths=all hash=4bf2a35e76f8
+-- mpv-cover: player/video.c adjust_audio_drift_compensation paths=all hash=e116e207687b
 def adjustAudioDriftCompensation (c : Ctx) (duration : Float) : Ctx :=
   if (c.videoSync ≠ vsDispResample ∧ c.videoSync ≠ vsDispTempo) ∨
       c.audioStatus ≠ statusPlaying then
@@ -258,7 +258,7 @@ C asserts `num_past_frames >= 1 && num_next_frames >= 1` and reads
 `vo_chain->filter` without a test, so the model describes mpv only while both
 arrays are non-empty and `vo_chain` is not `NULL`. Its one caller,
 `write_video`, returns on entry when `vo_chain` is `NULL`. -/
--- mpv-cover: player/video.c calculate_frame_duration paths=all unobservable=20,21,22,23 hash=183893b1e7ad
+-- mpv-cover: player/video.c calculate_frame_duration paths=all unobservable=20,21,22,23 hash=b90b6d375478
 def calculateFrameDuration (c : Ctx) : Ctx :=
   match c.voChain with
   | none => c

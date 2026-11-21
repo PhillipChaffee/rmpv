@@ -26,7 +26,8 @@ pub(crate) struct Arm {
 #[derive(Debug)]
 pub(crate) struct Function {
     pub(crate) name: String,
-    /// Digest of the whitespace-normalized original lines, so a claim goes stale when mpv changes.
+    /// Digest of the whitespace-normalized original lines and the arm kinds, so a claim goes
+    /// stale when mpv changes the function or the build changes its paths.
     pub(crate) hash: String,
     pub(crate) start_row: usize,
     pub(crate) end_row: usize,
@@ -407,15 +408,6 @@ fn function(node: Node<'_>, parsed: &Parsed<'_>, lines: &[&str]) -> Option<Funct
         .max(start_row);
     let name = declared_name(node, source)?;
     let lines = lines.get(start_row..=end_row)?;
-    let normalized = lines
-        .iter()
-        .flat_map(|line| line.split_whitespace())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let mut hash = String::new();
-    for byte in Sha256::digest(normalized.as_bytes()).iter().take(6) {
-        write!(hash, "{byte:02x}").ok()?;
-    }
 
     let mut branches = Vec::new();
     collect_arms(node, source, &mut branches);
@@ -425,6 +417,7 @@ fn function(node: Node<'_>, parsed: &Parsed<'_>, lines: &[&str]) -> Option<Funct
     for arm in &mut arms {
         arm.start_row = parsed.row(arm.start_row).unwrap_or(start_row);
     }
+    let hash = digest(lines, &arms)?;
     let mut unreadable_rows = BTreeSet::new();
     unreadable_rows_in(node, parsed, &mut unreadable_rows);
     unreadable_rows.retain(|row| (start_row..=end_row).contains(row));
@@ -437,6 +430,26 @@ fn function(node: Node<'_>, parsed: &Parsed<'_>, lines: &[&str]) -> Option<Funct
         arms,
         unreadable_rows,
     })
+}
+
+/// Digest of a function's original lines and of its arm kinds in path order. The arms come
+/// from the preprocessed text, so a macro in a header, the C library's `assert`, or a build
+/// option can change them while the function's own lines stay as they are. Either change
+/// moves path ids or adds paths, and must make a claim stale.
+fn digest(lines: &[&str], arms: &[Arm]) -> Option<String> {
+    let mut hasher = Sha256::new();
+    let words = lines.iter().flat_map(|line| line.split_whitespace());
+    hasher.update(words.collect::<Vec<_>>().join(" "));
+    // No word and no kind holds a newline, so the two lists cannot run together.
+    for arm in arms {
+        hasher.update("\n");
+        hasher.update(arm.kind);
+    }
+    let mut hash = String::new();
+    for byte in hasher.finalize().iter().take(6) {
+        write!(hash, "{byte:02x}").ok()?;
+    }
+    Some(hash)
 }
 
 fn declared_name(node: Node<'_>, source: &[u8]) -> Option<String> {
@@ -702,11 +715,50 @@ mod tests {
             .collect();
         assert_eq!(rows, [1, 1]);
         assert_eq!((function.start_row, function.end_row), (0, 2));
+    }
 
-        let raw = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
-        assert_eq!(
-            raw.functions.first().map(|raw| &raw.hash),
-            Some(&function.hash)
+    /// The hash of `f` when `f.c` holds `text` and the preprocessor turned it into `expanded`.
+    fn hash_of(text: &str, expanded: &str) -> String {
+        let preprocessed = format!("# 1 \"f.c\"\n{expanded}");
+        let file = SourceFile::parse_preprocessed("f.c".to_owned(), text.to_owned(), &preprocessed)
+            .expect("parses");
+        file.functions.first().expect("one function").hash.clone()
+    }
+
+    #[test]
+    fn the_hash_changes_when_a_macro_changes_the_arms() {
+        let text = "int f(int a) {\n    return PICK(a);\n}\n";
+        let plain = "int f(int a) {\n    return (a);\n}\n";
+        let conditional = "int f(int a) {\n    return ((a) ? 1 : 2);\n}\n";
+        let short_circuit = "int f(int a) {\n    return ((a) && g());\n}\n";
+        let two_short_circuits = "int f(int a) {\n    return ((a) && g() && h());\n}\n";
+
+        assert_ne!(hash_of(text, plain), hash_of(text, conditional));
+        assert_ne!(hash_of(text, conditional), hash_of(text, short_circuit));
+        assert_ne!(
+            hash_of(text, short_circuit),
+            hash_of(text, two_short_circuits)
+        );
+    }
+
+    #[test]
+    fn the_hash_is_the_same_when_lines_and_arms_are_the_same() {
+        let text = "int f(int a) {\n    return PICK(a);\n}\n";
+        let conditional = "int f(int a) {\n    return ((a) ? 1 : 2);\n}\n";
+        let other_values = "int f(int a) {\n    return ((a) ? 3 : 4);\n}\n";
+        let reindented = "int  f(int a)  {\n\treturn PICK(a);\n}\n";
+
+        assert_eq!(hash_of(text, conditional), hash_of(text, conditional));
+        assert_eq!(hash_of(text, conditional), hash_of(text, other_values));
+        assert_eq!(hash_of(text, conditional), hash_of(reindented, conditional));
+    }
+
+    #[test]
+    fn the_hash_changes_when_the_original_lines_change() {
+        let expanded = "int f(int a) {\n    return ((a) ? 1 : 2);\n}\n";
+        assert_ne!(
+            hash_of("int f(int a) {\n    return PICK(a);\n}\n", expanded),
+            hash_of("int f(int a) {\n    return PICK2(a);\n}\n", expanded)
         );
     }
 }

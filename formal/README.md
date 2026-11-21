@@ -58,16 +58,24 @@ stops. A second run skips finished stages and takes about a second. It writes:
 A claim is a comment directly above the Lean declaration that models an mpv function:
 
 ```lean
--- mpv-cover: common/playlist.c playlist_get_next paths=all hash=e80538901518
+-- mpv-cover: common/playlist.c playlist_get_next paths=all hash=97ab285258b3
 def getNext (pl : Playlist) (direction : Int) : Option Entry :=
 ```
 
 A path is the function's straight-line body (path 0) or one branch arm: an
 `if` or `else` body, a `case`, a loop body, one side of `?:`, or the right
 operand of a short-circuit `&&` or `||` (it runs only when the left side lets
-it). Use `paths=all` or a list such as `paths=0,2,3`. The hash is a digest of
-the function's original source lines, so the claim goes stale when mpv changes
-that function.
+it). Use `paths=all` or a list such as `paths=0,2,3`.
+
+The hash is a digest of two things: the function's original source lines, with
+runs of whitespace collapsed, and the kinds of its paths in id order (`body`,
+`if`, `else`, `case`, `loop`, `?`, `:`, `&&`, `||`, `assert`). So a claim goes
+stale when mpv changes the function, and also when its paths change while its
+own lines do not: a macro in a header changes, the C library's `assert` expands
+differently, or the build options differ. Without the second part, `paths=all`
+would take in new paths unseen and listed ids would point at other arms. The
+hash does not cover a change in a macro that leaves the kinds and order of the
+paths as they were, and it does not cover the functions this one calls.
 
 `mpv-cover` finds paths in the preprocessed source, so branches inside macros
 count. It runs `cc -E` on each file with that file's flags from
@@ -85,7 +93,7 @@ output, such as the branch in `MP_TARRAY_INSERT_AT` that grows the array, can
 be marked `unobservable`:
 
 ```lean
--- mpv-cover: common/playlist.c playlist_insert_at paths=0,1,3,4,6,7,8 unobservable=10 hash=5b59e2deca02
+-- mpv-cover: common/playlist.c playlist_insert_at paths=all unobservable=10 hash=4ec8fe004600
 ```
 
 A path cannot be in both lists. With `paths=all`, `unobservable=` takes its
