@@ -1,8 +1,6 @@
 # Differential check of Mpv/Common/Playlist.lean against mpv's common/playlist.c.
 
 oracle = "playlist-oracle"
-# mpv sources linked into the harness besides the file under test.
-sources = ["ta/ta.c", "ta/ta_talloc.c", "ta/ta_utils.c"]
 # The file the harness includes and the mutations edit.
 file = "common/playlist.c"
 

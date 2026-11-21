@@ -4,17 +4,6 @@
 
 #include <stdio.h>
 
-// Path handling is outside the checked functions; entries only need a filename.
-char *mp_file_url_to_filename(void *talloc_ctx, bstr url)
-{
-    return NULL;
-}
-
-char *mp_normalize_path(void *talloc_ctx, const char *path)
-{
-    return talloc_strdup(talloc_ctx, path);
-}
-
 static struct playlist_entry *detached;
 
 // Script index to entry: -1 is NULL, -2 is the detached entry.

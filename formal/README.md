@@ -148,8 +148,10 @@ cargo run -q --release -p mpv-fidelity -- --seed 7 --sequences 20000
 ```
 
 A target is a folder in `fidelity/targets/` with a `harness.c`, a
-`target.toml`, stub headers for mpv dependencies the checked functions do not
-use, and a script generator in `fidelity/src/`.
+`target.toml`, and a script generator in `fidelity/src/`. The harness is built
+with `cc @harness.rsp harness.c @harness-link.rsp` against the real static
+build in `.mpv-build` (`make mpv-build`; override with `--build`). A manifest
+may add `link_args`, extra linker arguments such as `-Wl,--wrap=name`.
 
 ## What coverage does and does not mean
 

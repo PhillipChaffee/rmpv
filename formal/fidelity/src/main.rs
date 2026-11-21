@@ -28,6 +28,9 @@ struct Cli {
     /// mpv checkout at the locked commit. Defaults to `<formal>/.mpv`.
     #[arg(long)]
     mpv: Option<PathBuf>,
+    /// Static mpv build from `make mpv-build`. Defaults to `<formal>/.mpv-build`.
+    #[arg(long)]
+    build: Option<PathBuf>,
     /// Independent operation sequences per target, each starting from an empty state.
     #[arg(long, default_value_t = 5000)]
     sequences: usize,
@@ -41,8 +44,10 @@ struct Cli {
 #[derive(Debug, Deserialize)]
 struct Target {
     oracle: String,
-    sources: Vec<String>,
     file: String,
+    /// Extra linker arguments, such as `-Wl,--wrap=name`.
+    #[serde(default)]
+    link_args: Vec<String>,
     mutation: Vec<Mutation>,
 }
 
@@ -57,6 +62,7 @@ struct Mutation {
 #[derive(Debug)]
 struct Run<'a> {
     mpv: &'a Path,
+    build: &'a Path,
     target_dir: &'a Path,
     work: &'a Path,
     script: &'a Path,
@@ -68,14 +74,6 @@ impl Run<'_> {
     fn build(&self, mutation: Option<&Mutation>) -> Result<PathBuf> {
         let binary = self.work.join("harness");
         let mut cc = Command::new("cc");
-        cc.args([
-            "-std=gnu11",
-            "-w",
-            "-O1",
-            "-ffunction-sections",
-            "-fdata-sections",
-        ]);
-        cc.args(["-Wl,--gc-sections", "-Werror=implicit-function-declaration"]);
         if let Some(mutation) = mutation {
             let original = self.mpv.join(&self.target.file);
             let text = fs::read_to_string(&original)?;
@@ -94,17 +92,14 @@ impl Run<'_> {
             cc.arg("-I")
                 .arg(original.parent().context("mpv file has no parent")?);
         }
-        cc.arg("-I")
-            .arg(self.target_dir.join("stubs"))
-            .arg("-I")
-            .arg(self.mpv);
+        // Mutant directories must precede the -I flags in the response file.
+        cc.arg(format!("@{}", self.build.join("harness.rsp").display()));
         cc.arg(self.target_dir.join("harness.c"));
-        cc.args(
-            self.target
-                .sources
-                .iter()
-                .map(|source| self.mpv.join(source)),
-        );
+        cc.arg(format!(
+            "@{}",
+            self.build.join("harness-link.rsp").display()
+        ));
+        cc.args(&self.target.link_args);
         let output = cc.arg("-o").arg(&binary).output().context("running cc")?;
         ensure!(
             output.status.success(),
@@ -159,6 +154,17 @@ fn explain(script: &str, at: usize, model: &[String], mpv: &[String]) -> String 
 
 fn check(cli: &Cli, name: &str, generate: Generator) -> Result<bool> {
     let mpv = cli.mpv.clone().unwrap_or_else(|| cli.formal.join(".mpv"));
+    let build = cli
+        .build
+        .clone()
+        .unwrap_or_else(|| cli.formal.join(".mpv-build"));
+    for response in ["harness.rsp", "harness-link.rsp"] {
+        ensure!(
+            build.join(response).exists(),
+            "{} is missing; run `make mpv-build`",
+            build.join(response).display()
+        );
+    }
     let target_dir = cli.formal.join("fidelity/targets").join(name);
     let manifest = target_dir.join("target.toml");
     let target: Target = toml::from_str(&fs::read_to_string(&manifest)?)
@@ -171,6 +177,7 @@ fn check(cli: &Cli, name: &str, generate: Generator) -> Result<bool> {
     fs::write(&script_path, &script)?;
     let run = Run {
         mpv: &mpv,
+        build: &build,
         target_dir: &target_dir,
         work: &work,
         script: &script_path,
