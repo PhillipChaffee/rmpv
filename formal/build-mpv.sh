@@ -5,7 +5,8 @@
 # Outputs, all under formal/.mpv-build:
 #   compile_commands.json  one entry per compiled mpv C file
 #   libmpv.a               every mpv object
-#   harness.rsp            -I, -D and language flags for code that includes mpv
+#   harness.rsp            the flags mpv's own C files are compiled with, less
+#                          warnings, diagnostics and output names
 #   harness-link.rsp       libmpv.a and the libraries it needs, in link order
 #
 # Usage: cc @formal/.mpv-build/harness.rsp x.c @formal/.mpv-build/harness-link.rsp -o x
@@ -141,15 +142,36 @@ def quote(arg):
     return '"' + arg.replace("\\", "\\\\").replace('"', '\\"') + '"' if re.search(r'[\s"\\]', arg) else arg
 
 entries = json.load(open(os.path.join(out, "compile_commands.json")))
-entry = next(e for e in entries if e["file"].endswith("common/playlist.c"))
-# Meson gives every mpv C file the same -I and -D flags, so one entry speaks
-# for all of them. Its include paths are relative to the build directory.
-flags = []
-for a in shlex.split(entry["command"]):
-    if a.startswith("-I"):
-        flags.append("-I" + os.path.normpath(os.path.join(entry["directory"], a[2:])))
-    elif a.startswith(("-D", "-U", "-std=")) or a == "-pthread":
-        flags.append(a)
+
+def harness_flags(entry):
+    """The entry's flags that decide what code the compiler emits."""
+    args = shlex.split(entry["command"])[1:]
+    flags = []
+    while args:
+        a = args.pop(0)
+        if a in ("-o", "-MF", "-MQ", "-MT"):
+            args.pop(0)
+        elif a == "-c" or a.startswith(("-M", "-W", "-fdiagnostics")):
+            pass
+        elif a.startswith("-I"):
+            # Include paths are relative to the build directory.
+            flags.append("-I" + os.path.normpath(os.path.join(entry["directory"], a[2:])))
+        elif a.startswith("-"):
+            flags.append(a)
+        elif os.path.normpath(os.path.join(entry["directory"], a)) != os.path.normpath(os.path.join(entry["directory"], entry["file"])):
+            sys.exit(f"build-mpv: unexpected argument {a!r} in the compile command of {entry['file']}")
+    return flags
+
+# A harness includes an mpv .c file and compiles it again, so it must get the
+# flags mpv compiled that file with: -O2 and -fno-signed-zeros change results.
+# One response file serves every target only while every file has one flag set.
+flags = harness_flags(entries[0])
+for entry in entries:
+    other = harness_flags(entry)
+    if other != flags:
+        sys.exit("build-mpv: mpv's C files are not all compiled with the same flags, so one harness.rsp "
+                 f"cannot stand for them:\n  {entries[0]['file']}: {' '.join(flags)}\n"
+                 f"  {entry['file']}: {' '.join(other)}")
 
 with open(os.path.join(out, "harness.rsp"), "w") as f:
     f.write("\n".join(quote(a) for a in flags) + "\n")

@@ -108,6 +108,8 @@ impl Run<'_> {
             cc.arg("-I")
                 .arg(original.parent().context("mpv file has no parent")?);
         }
+        // mpv's build makes this an error; the response file carries no -W flags.
+        cc.arg("-Werror=implicit-function-declaration");
         // Mutant directories must precede the -I flags in the response file.
         cc.arg(format!("@{}", self.build.join("harness.rsp").display()));
         cc.arg(self.target_dir.join("harness.c"));
