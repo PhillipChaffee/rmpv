@@ -31,6 +31,15 @@ lock_value() {
 
 [[ -f $mpv_src/meson.build ]] || die "mpv source missing at $mpv_src; run 'make mpv' first"
 
+# The build must be of unpatched mpv at the locked commit; `make mpv` keeps
+# local edits when it checks out, so check here.
+mpv_commit=$(sed -n '/^\[/q; s/^commit = "\(.*\)"/\1/p' "$lock")
+mpv_head=$(git -C "$mpv_src" rev-parse HEAD)
+[[ $mpv_head == "$mpv_commit" ]] ||
+    die "$mpv_src is at $mpv_head but mpv.lock.toml pins $mpv_commit; run 'make mpv'"
+[[ -z $(git -C "$mpv_src" status --porcelain) ]] ||
+    die "$mpv_src has local changes; discard them with 'git -C $mpv_src checkout -- .' and run 'make mpv'"
+
 # --- Stage 1: system packages ------------------------------------------------
 
 packages=(
