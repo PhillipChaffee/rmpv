@@ -207,6 +207,16 @@ fn collect_arms(node: Node<'_>, arms: &mut Vec<Arm>) {
             arms.extend(field("consequence").map(|then| arm(then, "?")));
             arms.extend(field("alternative").map(|otherwise| arm(otherwise, ":")));
         }
+        "binary_expression" => {
+            let kind = match field("operator").map(|operator| operator.kind()) {
+                Some("&&") => Some("&&"),
+                Some("||") => Some("||"),
+                _ => None,
+            };
+            if let Some((kind, right)) = kind.zip(field("right")) {
+                arms.push(arm(right, kind));
+            }
+        }
         _ => {}
     }
     let mut cursor = node.walk();
@@ -224,5 +234,25 @@ fn number_duplicates(functions: &mut [Function]) {
         if *count > 1 {
             function.name = format!("{}#{count}", function.name);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_circuit_operands_are_paths() {
+        let text = "int f(int a, int b) { if (a && b) return 1; return a || b ? 2 : 3; }\n";
+        let file = SourceFile::parse("f.c".to_owned(), text.to_owned()).expect("parses");
+        let kinds: Vec<&str> = file
+            .functions
+            .first()
+            .expect("one function")
+            .arms
+            .iter()
+            .map(|arm| arm.kind)
+            .collect();
+        assert_eq!(kinds, ["body", "&&", "if", "||", "?", ":"]);
     }
 }

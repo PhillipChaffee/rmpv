@@ -37,9 +37,10 @@ def getNext (pl : Playlist) (direction : Int) : Option Entry :=
 ```
 
 A path is the function's straight-line body (path 0) or one branch arm: an
-`if` or `else` body, a `case`, a loop body, or one side of `?:`. Use
-`paths=all` or a list such as `paths=0,2,3`. The hash is a digest of the
-function's source, so the claim goes stale when mpv changes that function.
+`if` or `else` body, a `case`, a loop body, one side of `?:`, or the right
+operand of a short-circuit `&&` or `||` (it runs only when the left side lets
+it). Use `paths=all` or a list such as `paths=0,2,3`. The hash is a digest of
+the function's source, so the claim goes stale when mpv changes that function.
 
 Print a function's path ids and a ready-made claim line:
 
@@ -95,8 +96,8 @@ produces inputs that satisfy mpv's own assertions.
 
 The path counts also miss some of mpv. `report` lists each gap with its size:
 
-- Branches hidden inside macros (`MPMAX`, `MP_TARRAY_INSERT_AT`) and
-  short-circuit `&&` and `||` are not separate paths.
+- Branches hidden inside macros (`MPMAX`, `MP_TARRAY_INSERT_AT`) are not
+  separate paths.
 - Code outside functions, such as option tables, is not counted.
 - Regions the C parser cannot read are not counted.
 - Lua, JavaScript, Objective-C, and Swift sources are not parsed.
