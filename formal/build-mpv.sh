@@ -169,9 +169,10 @@ flags = harness_flags(entries[0])
 for entry in entries:
     other = harness_flags(entry)
     if other != flags:
+        only = lambda mine, theirs: " ".join(a for a in mine if a not in theirs) or "(same flags, other order)"
         sys.exit("build-mpv: mpv's C files are not all compiled with the same flags, so one harness.rsp "
-                 f"cannot stand for them:\n  {entries[0]['file']}: {' '.join(flags)}\n"
-                 f"  {entry['file']}: {' '.join(other)}")
+                 f"cannot stand for them:\n  only {entries[0]['file']} has: {only(flags, other)}\n"
+                 f"  only {entry['file']} has: {only(other, flags)}")
 
 with open(os.path.join(out, "harness.rsp"), "w") as f:
     f.write("\n".join(quote(a) for a in flags) + "\n")
