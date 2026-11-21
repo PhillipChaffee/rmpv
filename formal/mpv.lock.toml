@@ -1,0 +1,4 @@
+# The exact mpv source the model describes. Bumping `commit` makes every claim
+# whose function changed show up as stale.
+repo = "https://github.com/PhillipChaffee/mpv"
+commit = "d11ffba253def00b5172c4b8b47e6b2eb765cae1"

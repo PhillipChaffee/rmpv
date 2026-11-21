@@ -1,0 +1,10 @@
+# Files the model deliberately does not cover. Everything else in mpv counts
+# against coverage. Each entry needs a reason a reviewer can disagree with.
+
+[[exclude]]
+glob = "test/**"
+reason = "mpv's own unit tests, not player behaviour"
+
+[[exclude]]
+glob = "fuzzers/**"
+reason = "fuzzing harnesses, not player behaviour"
