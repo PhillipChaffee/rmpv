@@ -23,9 +23,32 @@ pinned in `lean-toolchain`. Then, from the repository root:
 make proofs
 ```
 
-That fetches mpv at the pinned commit into `formal/.mpv`, checks every proof
-with `lake build --wfail`, validates every coverage claim, and runs the
-fidelity check. The fidelity check needs a C compiler and runs on Linux.
+That fetches mpv at the pinned commit into `formal/.mpv`, builds it, checks
+every proof with `lake build --wfail`, validates every coverage claim, and runs
+the fidelity check. It runs on Linux and needs these packages (Ubuntu 24.04
+names):
+
+```bash
+sudo apt-get install meson ninja-build pkg-config gcc g++ git python3 \
+  libavcodec-dev libavfilter-dev libavformat-dev libavutil-dev \
+  libswresample-dev libswscale-dev libass-dev
+```
+
+`make mpv-build` runs only the build step, `formal/build-mpv.sh`. It builds
+libplacebo at the commit pinned in `formal/mpv.lock.toml` into `formal/.deps`,
+because mpv needs a newer libplacebo than Ubuntu ships. Then it builds mpv as a
+static library into `formal/.mpv-build`, with every optional feature off. Run
+as root, it installs missing packages itself; otherwise it lists them and
+stops. A second run skips finished stages and takes about a second. It writes:
+
+- `compile_commands.json`: one entry per compiled mpv C file.
+- `libmpv.a`: every mpv object.
+- `harness.rsp` and `harness-link.rsp`: the compile and link flags for a
+  program that includes mpv headers or an mpv `.c` file:
+
+  ```bash
+  cc @formal/.mpv-build/harness.rsp x.c @formal/.mpv-build/harness-link.rsp -o x
+  ```
 
 ## Claiming coverage
 

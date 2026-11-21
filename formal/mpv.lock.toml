@@ -2,3 +2,9 @@
 # whose function changed show up as stale.
 repo = "https://github.com/PhillipChaffee/mpv"
 commit = "d11ffba253def00b5172c4b8b47e6b2eb765cae1"
+
+# mpv needs libplacebo >=7.387.0, newer than Ubuntu 24.04 ships, so
+# build-mpv.sh builds this tag (v7.387.0) from source.
+[libplacebo]
+repo = "https://code.videolan.org/videolan/libplacebo.git"
+commit = "275f7dea27924cdd34ab2e6c20e448b6bc4fab65"
