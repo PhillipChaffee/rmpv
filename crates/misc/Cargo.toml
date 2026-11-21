@@ -1,0 +1,62 @@
+[package]
+name = "rmpv-misc"
+description = "Safe Rust port of mpv's misc/ folder, written to mirror the C function by function"
+keywords = ["mpv", "port"]
+categories = ["multimedia"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The workspace lint table, with the relaxations the port needs. A crate cannot
+# inherit the workspace table and override part of it, so the table is repeated.
+# README.md gives the reason for each relaxation.
+[lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unused_crate_dependencies = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
+missing_const_for_fn = "allow"
+redundant_pub_crate = "allow"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+dbg_macro = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+unwrap_used = "warn"
+
+# Relaxed for this crate.
+indexing_slicing = "allow"
+cast_lossless = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+comparison_chain = "allow"
+manual_assert_eq = "allow"
+manual_div_ceil = "allow"
+manual_ilog2 = "allow"
+manual_is_power_of_two = "allow"
+manual_midpoint = "allow"
+manual_range_contains = "allow"
+manual_rotate = "allow"
+nonminimal_bool = "allow"
+many_single_char_names = "allow"
+option_if_let_else = "allow"
+similar_names = "allow"
+useless_let_if_seq = "allow"

@@ -1,9 +1,16 @@
 [files]
-extend-exclude = ["Cargo.lock"]
+# The language table of the port is copied from mpv and holds ISO 639 codes.
+extend-exclude = ["Cargo.lock", "crates/misc/src/language_tables.rs"]
 
 [default]
-extend-ignore-re = ["hash=[0-9a-f]{12}"]
+extend-ignore-re = [
+  "hash=[0-9a-f]{12}",
+  # Byte-string literals are test inputs and C tokens, not prose.
+  'b"[^"]*"',
+]
 
 [default.extend-words]
 # mpv file name prefix (ambient light sensor).
 als = "als"
+# Member of the union in mpv_node (byte array).
+ba = "ba"
