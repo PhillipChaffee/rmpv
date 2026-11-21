@@ -1,0 +1,180 @@
+# Differential check of Mpv/Player/Playloop.lean against mpv's player/playloop.c.
+
+oracle = "playloop-oracle"
+# The file the harness includes and the mutations edit.
+file = "player/playloop.c"
+# The harness supplies the play range get_current_pos_ratio asks player/misc.c for.
+link_args = ["-Wl,--wrap=get_play_start_pts", "-Wl,--wrap=get_play_end_pts"]
+
+# Each mutation plants one bug in a copy of the file. The check must notice
+# every one. A function counts as checked only if it has a mutation here.
+
+[[mutation]]
+function = "get_time_length"
+find = "demuxer->duration >= 0 ? demuxer->duration : MP_NOPTS_VALUE"
+replace = "demuxer->duration > 0 ? demuxer->duration : MP_NOPTS_VALUE"
+
+[[mutation]]
+function = "get_time_length"
+find = "demuxer->duration >= 0 ? demuxer->duration : MP_NOPTS_VALUE"
+replace = "demuxer->duration >= 0 ? demuxer->duration : -1"
+
+[[mutation]]
+function = "get_start_time"
+find = "if (!mpctx->opts->rebase_start_time)"
+replace = "if (mpctx->opts->rebase_start_time)"
+
+[[mutation]]
+function = "get_start_time"
+find = "if (dir < 0)"
+replace = "if (dir <= 0)"
+
+[[mutation]]
+function = "get_start_time"
+find = "res += MPMAX(mpctx->demuxer->duration, 0);"
+replace = "res += mpctx->demuxer->duration;"
+
+[[mutation]]
+function = "get_start_time"
+find = "res += mpctx->demuxer->start_time;"
+replace = "res = mpctx->demuxer->start_time;"
+
+[[mutation]]
+function = "get_current_time"
+find = "return mpctx->playback_pts * mpctx->play_dir;"
+replace = "return mpctx->playback_pts;"
+
+[[mutation]]
+function = "get_current_time"
+find = "return mpctx->last_seek_pts;"
+replace = "return mpctx->playback_pts;"
+
+[[mutation]]
+function = "get_playback_time"
+find = "cur = MPCLAMP(cur, 0, length);"
+replace = "cur = MPMAX(cur, 0);"
+
+[[mutation]]
+function = "get_playback_time"
+find = "if (length >= 0)"
+replace = "if (length > 0)"
+
+[[mutation]]
+function = "get_playback_time"
+find = "if (cur != MP_NOPTS_VALUE && cur < 0)"
+replace = "if (cur != MP_NOPTS_VALUE && cur <= 0)"
+
+[[mutation]]
+function = "get_playback_time"
+find = "if (cur != MP_NOPTS_VALUE && cur < 0)"
+replace = "if (cur < 0)"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "if (endpos > MPMAX(0, len))"
+replace = "if (endpos > len)"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "if (endpos < startpos)"
+replace = "if (endpos > startpos)"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "len = endpos - startpos;"
+replace = "len = endpos;"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "ret = MPCLAMP((pos - start) / len, 0, 1);"
+replace = "ret = MPCLAMP(pos / len, 0, 1);"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "ret = MPCLAMP((pos - start) / len, 0, 1);"
+replace = "ret = MPMAX((pos - start) / len, 0);"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "if (ret < 0) {"
+replace = "if (ret <= 0) {"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "if (size > 0 && demuxer->filepos >= 0)"
+replace = "if (size > 0 && demuxer->filepos > 0)"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "ret = MPCLAMP(demuxer->filepos / (double)size, 0, 1);"
+replace = "ret = demuxer->filepos / (double)size;"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "ret = MPCLAMP(demuxer->filepos / (double)size, 0, 1);"
+replace = "ret = MPCLAMP(demuxer->filepos / size, 0, 1);"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "ret = MPMAX(ret, 1.0 -"
+replace = "ret = MPMIN(ret, 1.0 -"
+
+[[mutation]]
+function = "get_current_pos_ratio"
+find = "if (mpctx->opts->play_frames > 0)"
+replace = "if (mpctx->opts->play_frames >= 0)"
+
+[[mutation]]
+function = "get_current_chapter"
+find = "return -2;"
+replace = "return -1;"
+
+[[mutation]]
+function = "get_current_chapter"
+find = "if (current_pts < mpctx->chapters[i].pts)"
+replace = "if (current_pts <= mpctx->chapters[i].pts)"
+
+[[mutation]]
+function = "get_current_chapter"
+find = "mpctx->last_chapter_seek : MPMAX(mpctx->last_chapter_seek, i - 1);"
+replace = "mpctx->last_chapter_seek : MPMAX(mpctx->last_chapter_seek, i);"
+
+[[mutation]]
+function = "get_current_chapter"
+find = "mpctx->last_chapter_seek : MPMAX(mpctx->last_chapter_seek, i - 1);"
+replace = "mpctx->last_chapter_seek : i - 1;"
+
+[[mutation]]
+function = "get_current_chapter"
+find = "return mpctx->last_chapter_flag ?"
+replace = "return !mpctx->last_chapter_flag ?"
+
+[[mutation]]
+function = "chapter_start_time"
+find = "if (chapter == -1)"
+replace = "if (chapter <= -1)"
+
+[[mutation]]
+function = "chapter_start_time"
+find = "if (chapter >= 0 && chapter < mpctx->num_chapters)"
+replace = "if (chapter > 0 && chapter < mpctx->num_chapters)"
+
+[[mutation]]
+function = "chapter_start_time"
+find = "if (chapter >= 0 && chapter < mpctx->num_chapters)"
+replace = "if (chapter >= 0 && chapter < mpctx->num_chapters - 1)"
+
+[[mutation]]
+function = "get_chapter_count"
+find = "return mpctx->num_chapters;"
+replace = "return mpctx->num_chapters - 1;"
+
+[[mutation]]
+function = "get_cache_buffering_percentage"
+find = "return mpctx->demuxer ? mpctx->cache_buffer : -1;"
+replace = "return mpctx->demuxer ? mpctx->cache_buffer : 0;"
+
+[[mutation]]
+function = "get_cache_buffering_percentage"
+find = "return mpctx->demuxer ? mpctx->cache_buffer : -1;"
+replace = "return mpctx->cache_buffer;"

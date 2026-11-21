@@ -7,7 +7,7 @@ real code.
 
 | Path | Role |
 | --- | --- |
-| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c`; `PlaylistTheorems.lean` holds more of its proofs. |
+| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c` and `Mpv/Player/Playloop.lean` mirrors part of `player/playloop.c`; each has a `…Theorems.lean` with its proofs. |
 | `mpv.lock.toml` | The mpv commit the model describes. |
 | `scope.toml` | mpv files left out on purpose, each with a reason. |
 | `cover/` | The `mpv-cover` tool. |
@@ -153,6 +153,11 @@ with `cc @harness.rsp harness.c @harness-link.rsp` against the real static
 build in `.mpv-build` (`make mpv-build`; override with `--build`). A manifest
 may add `link_args`, extra linker arguments such as `-Wl,--wrap=name`.
 
+| Target | mpv file | What the harness sets up |
+| --- | --- | --- |
+| `playlist` | `common/playlist.c` | Real playlists. The random numbers and the demuxer that opens a playlist file are replaced. |
+| `playloop` | `player/playloop.c` | A zero-initialized `MPContext` with the options, demuxer and chapter fields the script fills in. No player runs. `get_play_start_pts` and `get_play_end_pts` are replaced. |
+
 ## What coverage does and does not mean
 
 A covered path means a Lean declaration claims to model it and the claim is
@@ -181,6 +186,26 @@ The path counts also miss some of mpv. `report` lists each gap with its size:
 ## Modelling conventions
 
 - A C `int` is a Lean `Int`, so overflow is out of the model.
+- A C `double` is a Lean `Float`: both are IEEE-754 binary64. A definition
+  performs the C function's operations in the C function's order, and writes
+  `MPMAX` and `MPCLAMP` as the macros expand, because they are not symmetric
+  for NaN and signed zeros. `MP_NOPTS_VALUE` is the same bit pattern on both
+  sides, and the `playloop` script checks it against mpv's own.
+- The fidelity check compares floats exactly. A float crosses the script and
+  the output as the 16 hex digits of its bit pattern (`Float.toBits`), so both
+  sides start from the identical value and a difference in the last bit is a
+  divergence. There is no tolerance. The one exception is NaN: Lean's
+  `Float.ofBits` and `Float.toBits` keep a single NaN, so the harness prints
+  every NaN as `7ff8000000000000`. Whether a result is NaN is compared; the
+  sign and payload of a NaN are not.
+- Lean has no arithmetic laws for `Float`; its operations are opaque to the
+  proof checker. So no theorem says what a sum, product or comparison of two
+  times is. The theorems about float code state its case structure: which
+  branch runs, which input the result is, and the integer facts such as
+  chapter-index bounds. What the arithmetic computes rests on the fidelity
+  check alone.
+- A C `int64_t` converted to `double` is `Float.ofInt`, which rounds to
+  nearest like the C conversion for every `int64_t` value.
 - Memory allocation (`talloc`) and log output are not modelled. Paths that only
   do these are marked `unobservable`. A reference count that decides when an
   object is freed is state: `playlist_entry_unref` returns `none` when it frees

@@ -1,5 +1,5 @@
 name = "mpv"
-defaultTargets = ["Mpv", "playlist-oracle"]
+defaultTargets = ["Mpv", "playlist-oracle", "playloop-oracle"]
 
 [[lean_lib]]
 name = "Mpv"
@@ -10,3 +10,7 @@ name = "Oracle"
 [[lean_exe]]
 name = "playlist-oracle"
 root = "Oracle.Playlist"
+
+[[lean_exe]]
+name = "playloop-oracle"
+root = "Oracle.Playloop"

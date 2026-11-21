@@ -4,10 +4,12 @@
 //! in a copy of the mpv source and confirms the comparison notices each one.
 
 mod playlist;
+mod playloop;
+mod rng;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use clap::Parser;
-use playlist::Rng;
+use rng::Rng;
 use serde::Deserialize;
 use std::{
     fs::{self, File},
@@ -17,7 +19,10 @@ use std::{
 
 /// A target's name and the generator for its operation scripts.
 type Generator = fn(&mut Rng, usize, usize) -> String;
-const TARGETS: [(&str, Generator); 1] = [("playlist", playlist::script)];
+const TARGETS: [(&str, Generator); 2] = [
+    ("playlist", playlist::script),
+    ("playloop", playloop::script),
+];
 
 #[derive(Debug, Parser)]
 #[command(about)]
