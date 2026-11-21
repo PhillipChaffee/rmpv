@@ -7,7 +7,7 @@ real code.
 
 | Path | Role |
 | --- | --- |
-| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c` and `Mpv/Player/Playloop.lean` mirrors part of `player/playloop.c`; each has a `…Theorems.lean` with its proofs. |
+| `Mpv/` | The Lean model. `Mpv/Common/Playlist.lean` mirrors `common/playlist.c`. In `Mpv/Player/`, `Playloop.lean`, `Audio.lean` and `Video.lean` mirror parts of `player/playloop.c`, `player/audio.c` and `player/video.c`. Each has a `…Theorems.lean` with its proofs. |
 | `mpv.lock.toml` | The mpv commit the model describes. |
 | `scope.toml` | mpv files left out on purpose, each with a reason. |
 | `cover/` | The `mpv-cover` tool. |
@@ -157,6 +157,8 @@ may add `link_args`, extra linker arguments such as `-Wl,--wrap=name`.
 | --- | --- | --- |
 | `playlist` | `common/playlist.c` | Real playlists. The random numbers and the demuxer that opens a playlist file are replaced. |
 | `playloop` | `player/playloop.c` | A zero-initialized `MPContext` with the options, demuxer and chapter fields the script fills in. No player runs. `get_play_start_pts` and `get_play_end_pts` are replaced. |
+| `audio` | `player/audio.c` | A zero-initialized `MPContext` with the gain options, an `ao_chain`, and a track whose codec holds the replaygain data. No player runs and no audio output exists: `ao` is only tested for `NULL`, and `ao_get_delay` is replaced. |
+| `video` | `player/video.c` | A zero-initialized `MPContext` with the sync options, an `ao_chain`, a `vo_chain` with its filter's `container_fps`, a `vo` with its options, and the past and next frame arrays. No player runs. `written_audio_pts` and `playing_audio_pts` are mpv's own, from the unchanged `audio.c`. `ao_get_delay`, `ao_get_format` and `af_fmt_is_pcm` are replaced. |
 
 ## What coverage does and does not mean
 
@@ -193,6 +195,8 @@ found by reading the C source. None has been reproduced by running mpv.
 | --- | --- | --- | --- | --- |
 | `playlist_unshuffle` with `cmp_unshuffle` (`common/playlist.c`) | An entry with `original_index` -1 sits after an entry with a known index: shuffle, append, then unshuffle. | The comparison is not a consistent total order, so the result of `qsort` is undefined. | Avoided: the generator does not unshuffle such a playlist. No theorem assumes the comparison is consistent; each states what it needs of `qsort`'s output as a hypothesis. `unshuffle_entries` needs nothing. `unshuffle_perm` and `unshuffle_wf` need only that the output is a permutation of the input. `unshuffle_shuffle_entries` and `unshuffle_shuffle` also need the output to be in order by `cmp_unshuffle`, on a playlist that was just shuffled, where every entry has a known index. | Doc comment on `unshuffle` in `Mpv/Common/Playlist.lean`. |
 | `playlist_get_first_in_next_playlist` (`common/playlist.c`) | No current entry, as after a playlist has ended and `playlist-prev-playlist` is issued, unless `playlist_get_next` returns NULL, or `direction > 0` and the entry it returns has no playlist path. | Reads `pl->current->playlist_path`: a NULL dereference. | Avoided: the generator does not produce that state, and the model describes mpv only outside it. | Doc comment on `getFirstInNextPlaylist` in `Mpv/Common/Playlist.lean`. |
+| `calculate_frame_duration` (`player/video.c`) | `vo_chain` is `NULL`. | Reads `vo_chain->filter` without a test. Its one caller, `write_video`, returns on entry when `vo_chain` is `NULL`; whether the field can change between that test and the call was not traced. | Avoided: the generator sets `vo_chain` first. The model returns the state unchanged, which describes nothing mpv does. | Doc comment on `calculateFrameDuration` in `Mpv/Player/Video.lean`. |
+| `adjust_audio_drift_compensation` (`player/video.c`) | `video_out` is `NULL`. | Reads `video_out->opts` without a test. | Out of the model: `video_sync` is a plain field of the model's context, and the harness always has a `vo`. | Doc comment on `adjustAudioDriftCompensation` in `Mpv/Player/Video.lean`. |
 | `get_current_chapter` (`player/playloop.c`) | `last_chapter_seek` at or above `num_chapters`: a seek to chapter 4, then a `chapter-list` change or a demuxer chapter update that leaves 2 chapters. Neither resets the field. | Returns 4, an index at or above `get_chapter_count`, until a seek of another kind or a new file resets the field, or a new chapter seek overwrites it with a valid chapter. Possibly a bug in mpv. | Modelled as is: the model returns the same value and the generator produces the state. | Doc comment on `getCurrentChapter_bounds` in `Mpv/Player/PlayloopTheorems.lean`; `getCurrentChapter_lt_count_iff` is the unconditional fact. |
 
 ## Modelling conventions
@@ -216,6 +220,19 @@ found by reading the C source. None has been reproduced by running mpv.
   branch runs, which input the result is, and the integer facts such as
   chapter-index bounds. What the arithmetic computes rests on the fidelity
   check alone.
+- A C `float` is a Lean `Float32`, and crosses the script as 8 hex digits,
+  with every NaN printed as `7fc00000`. C mixes the two widths: the gain
+  functions in `player/audio.c` keep a `float` but divide and call `pow` in
+  `double`. A definition converts with `Float32.toFloat` and `Float.toFloat32`
+  at exactly the points where C promotes or stores.
+- Three results come from the C math library. `Float.pow` and `Float.abs`
+  compile to `pow` and `fabs`, the calls mpv makes. Lean has no `rint`, so
+  `Video.rint` builds round-to-nearest-even from `Float.floor`, and the `video`
+  script compares it with libm's `rint` directly. `pow` is not correctly
+  rounded and may differ between C libraries, so `db_gain`,
+  `compute_replaygain` and `audio_get_gain` are checked against the `pow` of
+  the machine that runs `mpv-fidelity`, with both sides calling the same one.
+  `rint` is checked in the default rounding mode only.
 - A C `int64_t` converted to `double` is `Float.ofInt`, which rounds to
   nearest like the C conversion for every `int64_t` value.
 - Memory allocation (`talloc`) and log output are not modelled. Paths that only

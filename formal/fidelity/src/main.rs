@@ -3,6 +3,7 @@
 //! For each target it compares the outputs on a random script, then plants bugs
 //! in a copy of the mpv source and confirms the comparison notices each one.
 
+mod avsync;
 mod playlist;
 mod playloop;
 mod rng;
@@ -21,9 +22,11 @@ use std::{
 
 /// A target's name and the generator for its operation scripts.
 type Generator = fn(&mut Rng, usize, usize) -> String;
-const TARGETS: [(&str, Generator); 2] = [
+const TARGETS: [(&str, Generator); 4] = [
     ("playlist", playlist::script),
     ("playloop", playloop::script),
+    ("audio", avsync::audio_script),
+    ("video", avsync::video_script),
 ];
 
 #[derive(Debug, Parser)]

@@ -1,4 +1,5 @@
 import Mpv.Player.Playloop
+import Oracle.Script
 
 /-!
 Runs the playloop model on a script of operations, one per line on stdin, and
@@ -9,6 +10,7 @@ from the identical value and the comparison is exact.
 -/
 
 open Mpv.Player.Playloop
+open Oracle.Script
 
 namespace Oracle.Playloop
 
@@ -24,20 +26,6 @@ def empty : World :=
              playDir := 0, lastSeekPts := 0, maxFrames := 0, chapters := #[],
              lastChapterSeek := 0, lastChapterFlag := false, cacheBuffer := 0 },
     rangeStart := 0, rangeEnd := 0 }
-
-def hexDigit (c : Char) : Nat :=
-  if c.isDigit then c.toNat - '0'.toNat else c.toNat - 'a'.toNat + 10
-
-def float (word : String) : Float :=
-  Float.ofBits (word.foldl (fun n c => 16 * n + hexDigit c) 0).toUInt64
-
-def showFloat (x : Float) : String :=
-  let digits := Nat.toDigits 16 x.toBits.toNat
-  String.ofList (List.replicate (16 - digits.length) '0' ++ digits)
-
-def int (word : String) : Int := word.toInt?.getD 0
-
-def bit (b : Bool) : String := if b then "1" else "0"
 
 def showState (w : World) : String :=
   let c := w.ctx
@@ -85,17 +73,8 @@ def step (w : World) (op : String) (args : List String) : String × World :=
   | "cachepct", [] => number (getCacheBufferingPercentage c)
   | _, _ => ("bad", w)
 
-partial def loop (stdin : IO.FS.Stream) (w : World) : IO Unit := do
-  let line ← stdin.getLine
-  if line.isEmpty then return
-  match line.trimAscii.toString.splitOn " " with
-  | op :: words =>
-    let (result, next) := step w op words
-    IO.println s!"{result} | {showState next}"
-    loop stdin next
-  | [] => loop stdin w
-
 end Oracle.Playloop
 
 def main : IO Unit := do
-  Oracle.Playloop.loop (← IO.getStdin) Oracle.Playloop.empty
+  Oracle.Script.loop Oracle.Playloop.step Oracle.Playloop.showState (← IO.getStdin)
+    Oracle.Playloop.empty

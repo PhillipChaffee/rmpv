@@ -7,12 +7,12 @@ use crate::rng::Rng;
 use std::fmt::Write as _;
 
 /// `MP_NOPTS_VALUE`. The `nopts` operation checks it against mpv's own.
-const NOPTS: f64 = -9_223_372_036_854_775_808.0;
+pub(crate) const NOPTS: f64 = -9_223_372_036_854_775_808.0;
 
 /// Times at the edges of every comparison the functions make: the sentinel and
 /// its neighbours, both zeros, the smallest positive double, two values one
 /// bit apart, infinities, and NaNs with either sign.
-const SPECIAL: [f64; 24] = [
+pub(crate) const SPECIAL: [f64; 24] = [
     NOPTS,
     NOPTS,
     -9_223_372_036_854_777_856.0,
@@ -40,7 +40,7 @@ const SPECIAL: [f64; 24] = [
 ];
 
 /// A NaN with the sign bit set and a payload, to show whether either survives.
-const NEGATIVE_NAN: u64 = 0xFFF8_0000_0000_0ABC;
+pub(crate) const NEGATIVE_NAN: u64 = 0xFFF8_0000_0000_0ABC;
 
 /// File sizes and positions, with values no double represents exactly.
 const OFFSETS: [i64; 12] = [
@@ -69,7 +69,7 @@ struct State {
     chapters: Vec<f64>,
 }
 
-fn chance(rng: &mut Rng, percent: i64) -> bool {
+pub(crate) fn chance(rng: &mut Rng, percent: i64) -> bool {
     rng.range(0, 99) < percent
 }
 
@@ -93,7 +93,7 @@ fn time(rng: &mut Rng, state: &State) -> f64 {
     }
 }
 
-fn hex(value: f64) -> String {
+pub(crate) fn hex(value: f64) -> String {
     format!("{:016x}", value.to_bits())
 }
 

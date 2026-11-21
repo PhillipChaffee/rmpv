@@ -1,0 +1,180 @@
+# Differential check of Mpv/Player/Audio.lean against mpv's player/audio.c.
+
+oracle = "audio-oracle"
+# The file the harness includes and the mutations edit.
+file = "player/audio.c"
+# The harness supplies the delay playing_audio_pts asks the audio output for.
+link_args = ["-Wl,--wrap=ao_get_delay"]
+
+# Each mutation plants one bug in a copy of the file. The check must notice
+# every one. A function counts as checked only if it has a mutation here.
+
+[[mutation]]
+function = "db_gain"
+find = "return pow(10.0, db/20.0);"
+replace = "return pow(10.0, db/10.0);"
+
+[[mutation]]
+function = "db_gain"
+find = "return pow(10.0, db/20.0);"
+replace = "return pow(10.0, db*0.05);"
+
+[[mutation]]
+function = "db_gain"
+find = "return pow(10.0, db/20.0);"
+replace = "return exp(log(10.0) * (db/20.0));"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "float rgain = 1.0;"
+replace = "float rgain = 0.5;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "if (track)\n        rg = track->stream->codec->replaygain_data;"
+replace = "if (track)\n        rg = NULL;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "if (opts->rgain_mode && rg) {"
+replace = "if (rg) {"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "if (opts->rgain_mode == 1) {"
+replace = "if (opts->rgain_mode == 2) {"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "gain = rg->track_gain;"
+replace = "gain = rg->album_gain;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "peak = rg->track_peak;"
+replace = "peak = rg->album_peak;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "gain = rg->album_gain;"
+replace = "gain = rg->track_gain;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "peak = rg->album_peak;"
+replace = "peak = rg->track_peak;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "gain += opts->rgain_preamp;"
+replace = "gain -= opts->rgain_preamp;"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "gain += opts->rgain_preamp;\n        rgain = db_gain(gain);"
+replace = "rgain = db_gain((double)gain + opts->rgain_preamp);"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "if (!opts->rgain_clip) {"
+replace = "if (opts->rgain_clip) {"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "rgain = MPMIN(rgain, 1.0 / peak);"
+replace = "rgain = MPMAX(rgain, 1.0 / peak);"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "rgain = MPMIN(rgain, 1.0 / peak);"
+replace = "rgain = MPMIN(1.0 / peak, rgain);"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "} else if (opts->rgain_fallback) {"
+replace = "} else if (opts->rgain_fallback > 0) {"
+
+[[mutation]]
+function = "compute_replaygain"
+find = "rgain = db_gain(opts->rgain_fallback);"
+replace = "rgain = db_gain(-opts->rgain_fallback);"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "float gain = MPMAX(opts->softvol_volume / 100.0, 0);"
+replace = "float gain = opts->softvol_volume / 100.0;"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "float gain = MPMAX(opts->softvol_volume / 100.0, 0);"
+replace = "float gain = MPMAX(opts->softvol_volume / 10.0, 0);"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "gain = pow(gain, 3);"
+replace = "gain = pow(gain, 2);"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "gain = pow(gain, 3);"
+replace = "gain = gain * gain * gain;"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "gain *= compute_replaygain(mpctx);"
+replace = "gain *= 1;"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "gain *= db_gain(opts->softvol_gain);"
+replace = "gain *= (float)db_gain(opts->softvol_gain);"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "gain *= db_gain(opts->softvol_gain);"
+replace = "gain *= 1;"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "if (opts->softvol_mute)\n        gain = 0.0;"
+replace = "if (!opts->softvol_mute)\n        gain = 0.0;"
+
+[[mutation]]
+function = "audio_get_gain"
+find = "if (opts->softvol_mute)\n        gain = 0.0;"
+replace = "if (opts->softvol_mute)\n        gain = 1.0;"
+
+[[mutation]]
+function = "written_audio_pts"
+find = "return mpctx->ao_chain ? mpctx->ao_chain->last_out_pts : MP_NOPTS_VALUE;"
+replace = "return mpctx->ao_chain ? mpctx->ao_chain->last_out_pts : 0;"
+
+[[mutation]]
+function = "written_audio_pts"
+find = "return mpctx->ao_chain ? mpctx->ao_chain->last_out_pts : MP_NOPTS_VALUE;"
+replace = "return mpctx->ao_chain ? mpctx->ao_chain->start_pts : MP_NOPTS_VALUE;"
+
+[[mutation]]
+function = "playing_audio_pts"
+find = "if (pts == MP_NOPTS_VALUE || !mpctx->ao)"
+replace = "if (!mpctx->ao)"
+
+[[mutation]]
+function = "playing_audio_pts"
+find = "if (pts == MP_NOPTS_VALUE || !mpctx->ao)"
+replace = "if (pts == MP_NOPTS_VALUE)"
+
+[[mutation]]
+function = "playing_audio_pts"
+find = "return pts - mpctx->audio_speed * ao_get_delay(mpctx->ao);"
+replace = "return pts + mpctx->audio_speed * ao_get_delay(mpctx->ao);"
+
+[[mutation]]
+function = "playing_audio_pts"
+find = "return pts - mpctx->audio_speed * ao_get_delay(mpctx->ao);"
+replace = "return pts - ao_get_delay(mpctx->ao);"
+
+[[mutation]]
+function = "playing_audio_pts"
+find = "return pts - mpctx->audio_speed * ao_get_delay(mpctx->ao);"
+replace = "return pts - mpctx->video_speed * ao_get_delay(mpctx->ao);"

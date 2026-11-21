@@ -1,0 +1,500 @@
+# Differential check of Mpv/Player/Video.lean against mpv's player/video.c.
+
+oracle = "video-oracle"
+# The file the harness includes and the mutations edit.
+file = "player/video.c"
+# The harness supplies what the audio output reports: its delay, its format,
+# and whether audio/format.c calls that format PCM.
+link_args = [
+  "-Wl,--wrap=ao_get_delay",
+  "-Wl,--wrap=ao_get_format",
+  "-Wl,--wrap=af_fmt_is_pcm",
+]
+
+# Each mutation plants one bug in a copy of the file. The check must notice
+# every one. A function counts as checked only if it has a mutation here.
+
+[[mutation]]
+function = "adjust_sync"
+find = "double a_pts = written_audio_pts(mpctx) + opts->audio_delay - mpctx->delay;"
+replace = "double a_pts = written_audio_pts(mpctx) + opts->audio_delay + mpctx->delay;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "double a_pts = written_audio_pts(mpctx) + opts->audio_delay - mpctx->delay;"
+replace = "double a_pts = written_audio_pts(mpctx) - mpctx->delay;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "double change = av_delay * 0.1;"
+replace = "double change = av_delay * 0.2;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "double factor = fabs(av_delay) < 0.3 ? 0.1 : 0.4;"
+replace = "double factor = fabs(av_delay) <= 0.3 ? 0.1 : 0.4;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "double factor = fabs(av_delay) < 0.3 ? 0.1 : 0.4;"
+replace = "double factor = av_delay < 0.3 ? 0.1 : 0.4;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "double max_change = opts->default_max_pts_correction >= 0 ?"
+replace = "double max_change = opts->default_max_pts_correction > 0 ?"
+
+[[mutation]]
+function = "adjust_sync"
+find = "opts->default_max_pts_correction : frame_time * factor;"
+replace = "opts->default_max_pts_correction : frame_time;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "if (change < -max_change)"
+replace = "if (change < max_change)"
+
+[[mutation]]
+function = "adjust_sync"
+find = "change = max_change;"
+replace = "change = -max_change;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "mpctx->delay += change;"
+replace = "mpctx->delay -= change;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "mpctx->total_avsync_change += change;"
+replace = "mpctx->total_avsync_change = change;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "if (mpctx->display_sync_active)\n        mpctx->total_avsync_change = 0;"
+replace = "if (!mpctx->display_sync_active)\n        mpctx->total_avsync_change = 0;"
+
+[[mutation]]
+function = "adjust_sync"
+find = "if (mpctx->audio_status != STATUS_PLAYING)\n        return;\n\n    double a_pts"
+replace = "if (mpctx->audio_status < STATUS_PLAYING)\n        return;\n\n    double a_pts"
+
+[[mutation]]
+function = "update_av_diff"
+find = "struct MPOpts *opts = mpctx->opts;\n\n    mpctx->last_av_difference = 0;"
+replace = "struct MPOpts *opts = mpctx->opts;\n\n    mpctx->last_av_difference += 0;"
+
+[[mutation]]
+function = "update_av_diff"
+find = "mpctx->video_status != STATUS_PLAYING)\n        return;"
+replace = "mpctx->video_status < STATUS_PLAYING)\n        return;"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (mpctx->audio_status != STATUS_PLAYING ||\n        mpctx->video_status"
+replace = "if (mpctx->audio_status != STATUS_PLAYING &&\n        mpctx->video_status"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (mpctx->vo_chain && mpctx->vo_chain->is_sparse)\n        return;\n\n    double a_pos"
+replace = "if (mpctx->vo_chain && !mpctx->vo_chain->is_sparse)\n        return;\n\n    double a_pos"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (a_pos != MP_NOPTS_VALUE && mpctx->video_pts != MP_NOPTS_VALUE) {"
+replace = "if (a_pos != MP_NOPTS_VALUE) {"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (a_pos != MP_NOPTS_VALUE && mpctx->video_pts != MP_NOPTS_VALUE) {"
+replace = "if (mpctx->video_pts != MP_NOPTS_VALUE) {"
+
+[[mutation]]
+function = "update_av_diff"
+find = "mpctx->last_av_difference = a_pos - mpctx->video_pts_unrounded"
+replace = "mpctx->last_av_difference = a_pos - mpctx->video_pts"
+
+[[mutation]]
+function = "update_av_diff"
+find = "+ opts->audio_delay + offset;"
+replace = "+ opts->audio_delay - offset;"
+
+[[mutation]]
+function = "update_av_diff"
+find = "+ opts->audio_delay + offset;"
+replace = "+ (opts->audio_delay + offset);"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (fabs(mpctx->last_av_difference) > 0.5 && !mpctx->drop_message_shown) {"
+replace = "if (fabs(mpctx->last_av_difference) >= 0.5 && !mpctx->drop_message_shown) {"
+
+[[mutation]]
+function = "update_av_diff"
+find = "if (fabs(mpctx->last_av_difference) > 0.5 && !mpctx->drop_message_shown) {"
+replace = "if (mpctx->last_av_difference > 0.5 && !mpctx->drop_message_shown) {"
+
+[[mutation]]
+function = "update_av_diff"
+find = "mpctx->drop_message_shown = true;"
+replace = "mpctx->drop_message_shown = false;"
+
+[[mutation]]
+function = "calc_average_frame_duration"
+find = "if (dur <= 0)\n            continue;\n        total += dur;\n        num += 1;"
+replace = "if (dur < 0)\n            continue;\n        total += dur;\n        num += 1;"
+
+[[mutation]]
+function = "calc_average_frame_duration"
+find = "total += dur;\n        num += 1;\n    }\n    return num"
+replace = "total += dur;\n        num += 2;\n    }\n    return num"
+
+[[mutation]]
+function = "calc_average_frame_duration"
+find = "return num > 0 ? total / num : 0;"
+replace = "return num > 0 ? total / num : 1;"
+
+[[mutation]]
+function = "calc_average_frame_duration"
+find = "return num > 0 ? total / num : 0;"
+replace = "return num > 1 ? total / num : 0;"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "double ratio = frame / vsync;"
+replace = "double ratio = vsync / frame;"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "for (int factor = 1; factor <= max_factor; factor++) {"
+replace = "for (int factor = 1; factor < max_factor; factor++) {"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "for (int factor = 1; factor <= max_factor; factor++) {"
+replace = "for (int factor = 2; factor <= max_factor; factor++) {"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "double scale = ratio * factor / rint(ratio * factor);"
+replace = "double scale = ratio * factor / round(ratio * factor);"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "double scale = ratio * factor / rint(ratio * factor);"
+replace = "double scale = ratio * (factor / rint(ratio * factor));"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "if (fabs(scale - 1) <= max_change)"
+replace = "if (fabs(scale - 1) < max_change)"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "if (fabs(scale - 1) <= max_change)"
+replace = "if (scale - 1 <= max_change)"
+
+[[mutation]]
+function = "calc_best_speed"
+find = "return -1;\n}\n\nstatic double find_best_speed"
+replace = "return 0;\n}\n\nstatic double find_best_speed"
+
+[[mutation]]
+function = "find_best_speed"
+find = "double best = calc_best_speed(vsync, dur / mpctx->opts->playback_speed,"
+replace = "double best = calc_best_speed(vsync, dur * mpctx->opts->playback_speed,"
+
+[[mutation]]
+function = "find_best_speed"
+find = "mpctx->opts->sync_max_video_change / 100,"
+replace = "mpctx->opts->sync_max_video_change / 10,"
+
+[[mutation]]
+function = "find_best_speed"
+find = "mpctx->opts->sync_max_factor);"
+replace = "mpctx->opts->sync_max_factor - 1);"
+
+[[mutation]]
+function = "find_best_speed"
+find = "if (best <= 0)"
+replace = "if (best <= 1)"
+
+[[mutation]]
+function = "find_best_speed"
+find = "total += best;"
+replace = "total = best;"
+
+[[mutation]]
+function = "find_best_speed"
+find = "num++;"
+replace = "num += 2;"
+
+[[mutation]]
+function = "find_best_speed"
+find = "return num > 0 ? total / num : 1;"
+replace = "return num > 0 ? total / num : 0;"
+
+[[mutation]]
+function = "find_best_speed"
+find = "            continue;\n        double best"
+replace = "            break;\n        double best"
+
+[[mutation]]
+function = "using_spdif_passthrough"
+find = "return !af_fmt_is_pcm(format);"
+replace = "return af_fmt_is_pcm(format);"
+
+[[mutation]]
+function = "using_spdif_passthrough"
+find = "if (mpctx->ao_chain && mpctx->ao_chain->ao) {"
+replace = "if (mpctx->ao_chain) {"
+
+[[mutation]]
+function = "using_spdif_passthrough"
+find = "return !af_fmt_is_pcm(format);\n    }\n    return false;"
+replace = "return !af_fmt_is_pcm(format);\n    }\n    return true;"
+
+[[mutation]]
+function = "using_spdif_passthrough"
+find = "ao_get_format(mpctx->ao_chain->ao, &samplerate, &format, &channels);"
+replace = "ao_get_format(mpctx->ao_chain->ao, &format, &samplerate, &channels);"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "if ((mode != VS_DISP_RESAMPLE && mode != VS_DISP_TEMPO) ||"
+replace = "if ((mode != VS_DISP_RESAMPLE) ||"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "if ((mode != VS_DISP_RESAMPLE && mode != VS_DISP_TEMPO) ||"
+replace = "if ((mode != VS_DISP_TEMPO) ||"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->audio_status != STATUS_PLAYING)\n    {"
+replace = "mpctx->audio_status < STATUS_PLAYING)\n    {"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->speed_factor_a = mpctx->speed_factor_v;"
+replace = "mpctx->speed_factor_a = 1;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->audio_drift_compensation = 0;\n        mpctx->avd_filtered = 0;\n        return;"
+replace = "mpctx->audio_drift_compensation += 0;\n        mpctx->avd_filtered = 0;\n        return;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->avd_filtered = 0;\n        return;"
+replace = "mpctx->avd_filtered += 0;\n        return;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "const double AVD_FILTER_TIME = 1.0;"
+replace = "const double AVD_FILTER_TIME = 2.0;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "const double AVD_RECOVERY_TIME = 10.0;"
+replace = "const double AVD_RECOVERY_TIME = 5.0;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "const double SLEW_RAMP_FRAMES = 10.0;"
+replace = "const double SLEW_RAMP_FRAMES = 20.0;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double max_correct = opts->sync_max_audio_change / 100;"
+replace = "double max_correct = opts->sync_max_audio_change / 10;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double other = opts->playback_speed * mpctx->speed_factor_v;"
+replace = "double other = opts->playback_speed;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double comp = 1.0 + mpctx->audio_drift_compensation;"
+replace = "double comp = 1.0;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double alpha = duration / (AVD_FILTER_TIME + duration);"
+replace = "double alpha = duration / AVD_FILTER_TIME;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->avd_filtered += alpha * (mpctx->last_av_difference -"
+replace = "mpctx->avd_filtered = alpha * (mpctx->last_av_difference -"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double p_delta = MPCLAMP(-avd_lp / (AVD_RECOVERY_TIME * other),"
+replace = "double p_delta = MPCLAMP(avd_lp / (AVD_RECOVERY_TIME * other),"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double p_delta = MPCLAMP(-avd_lp / (AVD_RECOVERY_TIME * other),"
+replace = "double p_delta = MPCLAMP(-avd_lp / AVD_RECOVERY_TIME * other,"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double slew = MPMIN(fabs(p_delta), max_correct / SLEW_RAMP_FRAMES);"
+replace = "double slew = MPMAX(fabs(p_delta), max_correct / SLEW_RAMP_FRAMES);"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double slew = MPMIN(fabs(p_delta), max_correct / SLEW_RAMP_FRAMES);"
+replace = "double slew = MPMIN(p_delta, max_correct / SLEW_RAMP_FRAMES);"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double target_comp = MPCLAMP(1.0 + p_delta,"
+replace = "double target_comp = MPCLAMP(1.0 - p_delta,"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "double new_comp = comp + MPCLAMP(target_comp - comp, -slew, +slew);"
+replace = "double new_comp = comp + (target_comp - comp);"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->audio_drift_compensation = new_comp - 1.0;"
+replace = "mpctx->audio_drift_compensation = new_comp;"
+
+[[mutation]]
+function = "adjust_audio_drift_compensation"
+find = "mpctx->speed_factor_a = new_comp * mpctx->speed_factor_v;"
+replace = "mpctx->speed_factor_a = new_comp;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "? 1.0 / vo_c->filter->container_fps : -1;"
+replace = "? 1.0 / vo_c->filter->container_fps : 0;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "double demux_duration = vo_c->filter->container_fps > 0"
+replace = "double demux_duration = vo_c->filter->container_fps >= 0"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (mpctx->num_next_frames >= 2) {"
+replace = "if (mpctx->num_next_frames >= 3) {"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (pts0 != MP_NOPTS_VALUE && pts1 != MP_NOPTS_VALUE && pts1 >= pts0)"
+replace = "if (pts0 != MP_NOPTS_VALUE && pts1 != MP_NOPTS_VALUE && pts1 > pts0)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (pts0 != MP_NOPTS_VALUE && pts1 != MP_NOPTS_VALUE && pts1 >= pts0)"
+replace = "if (pts1 != MP_NOPTS_VALUE && pts1 >= pts0)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (pts0 != MP_NOPTS_VALUE && pts1 != MP_NOPTS_VALUE && pts1 >= pts0)"
+replace = "if (pts0 != MP_NOPTS_VALUE && pts1 >= pts0)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "duration = pts1 - pts0;"
+replace = "duration = pts0 - pts1;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "double tolerance = MP_PTS_ROUNDING_TOLERANCE;"
+replace = "double tolerance = 0.003;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "for (int n = 1; n < mpctx->num_past_frames; n++) {"
+replace = "for (int n = 0; n < mpctx->num_past_frames; n++) {"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "for (int n = 1; n < mpctx->num_past_frames; n++) {"
+replace = "for (int n = 1; n < mpctx->num_past_frames - 1; n++) {"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (dur <= 0 || fabs(dur - duration) >= tolerance)\n            break;"
+replace = "if (dur <= 0 || fabs(dur - duration) >= tolerance)\n            continue;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (dur <= 0 || fabs(dur - duration) >= tolerance)"
+replace = "if (dur <= 0 || fabs(dur - duration) > tolerance)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (dur <= 0 || fabs(dur - duration) >= tolerance)"
+replace = "if (dur < 0 || fabs(dur - duration) >= tolerance)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (dur <= 0 || fabs(dur - duration) >= tolerance)"
+replace = "if (dur <= 0 || dur - duration >= tolerance)"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "double approx_duration = num_dur > 0 ? total / num_dur : duration;"
+replace = "double approx_duration = num_dur > 0 ? total / num_dur : demux_duration;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "double approx_duration = num_dur > 0 ? total / num_dur : duration;"
+replace = "double approx_duration = duration;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (demux_duration > 0) {"
+replace = "if (demux_duration > 1) {"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "if (fabs(duration - demux_duration) < tolerance &&"
+replace = "if ("
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "fabs(total - demux_duration * num_dur) < tolerance &&"
+replace = "fabs(total - demux_duration) < tolerance &&"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "(num_dur >= 16 || num_dur >= mpctx->num_past_frames - 4))"
+replace = "(num_dur >= mpctx->num_past_frames - 4))"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "(num_dur >= 16 || num_dur >= mpctx->num_past_frames - 4))"
+replace = "(num_dur >= 16))"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "(num_dur >= 16 || num_dur >= mpctx->num_past_frames - 4))"
+replace = "(num_dur >= 16 || num_dur >= mpctx->num_past_frames - 5))"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "(num_dur >= 16 || num_dur >= mpctx->num_past_frames - 4))"
+replace = "(num_dur >= 17 || num_dur >= mpctx->num_past_frames - 4))"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "approx_duration = demux_duration;"
+replace = "approx_duration = duration;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "mpctx->past_frames[0].duration = duration;"
+replace = "mpctx->past_frames[0].duration = approx_duration;"
+
+[[mutation]]
+function = "calculate_frame_duration"
+find = "mpctx->past_frames[0].approx_duration = approx_duration;"
+replace = "mpctx->past_frames[0].approx_duration = duration;"
