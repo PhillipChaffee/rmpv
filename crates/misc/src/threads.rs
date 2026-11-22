@@ -15,9 +15,13 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[cfg(loom)]
+pub(crate) use loom::sync::atomic::{AtomicBool, Ordering};
+#[cfg(loom)]
 pub(crate) use loom::sync::{Condvar, Mutex, MutexGuard};
 #[cfg(loom)]
 pub(crate) use loom::thread;
+#[cfg(not(loom))]
+pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(loom))]
 pub(crate) use std::sync::{Condvar, Mutex, MutexGuard};
 #[cfg(not(loom))]

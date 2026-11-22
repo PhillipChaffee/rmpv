@@ -136,3 +136,70 @@ pub fn clock_seed() -> u64 {
             .wrapping_add(u64::from(d.subsec_nanos()))
     })
 }
+
+/// `O_NONBLOCK` on Linux.
+const O_NONBLOCK: i32 = 0o4000;
+
+/// The pipe of `mp_make_wakeup_pipe` (`osdep/io.c`): both ends
+/// non-blocking and close-on-exec.
+///
+/// The standard library makes a pipe but cannot set `O_NONBLOCK` on it.
+/// Opening `/proc/self/fd/N` opens the same pipe again, with the flags the
+/// opener asks for, so each end is opened again that way and the first two
+/// descriptors are closed. Without `/proc` this fails, which mpv's callers
+/// see as they would a failed `pipe()`.
+#[derive(Debug)]
+pub struct WakeupPipe {
+    read: File,
+    write: File,
+}
+
+/// Opens the pipe end `fd` again, non-blocking.
+fn reopen_nonblocking(fd: i32, write: bool) -> Option<File> {
+    std::fs::OpenOptions::new()
+        .read(!write)
+        .write(write)
+        .custom_flags(O_NONBLOCK)
+        .open(format!("/proc/self/fd/{fd}"))
+        .ok()
+}
+
+impl WakeupPipe {
+    /// `mp_make_wakeup_pipe`; `None` where it returns -1.
+    #[must_use]
+    pub fn new() -> Option<Self> {
+        use std::os::fd::AsRawFd as _;
+        let (r, w) = std::io::pipe().ok()?;
+        let read = reopen_nonblocking(r.as_raw_fd(), false)?;
+        let write = reopen_nonblocking(w.as_raw_fd(), true)?;
+        Some(Self { read, write })
+    }
+
+    /// The read end, for `poll`.
+    #[must_use]
+    pub fn read_fd(&self) -> i32 {
+        use std::os::fd::AsRawFd as _;
+        self.read.as_raw_fd()
+    }
+
+    /// `write(fd[1], &(char){0}, 1)`, ignoring the result as mpv does: on a
+    /// full pipe it fails with `EAGAIN`.
+    pub fn write_byte(&self) {
+        let _ = (&self.write).write(&[0]);
+    }
+
+    /// Reads 256 bytes at a time until the pipe is empty, as
+    /// `mp_cancel_reset` does: it stops at the first result that is not a
+    /// positive count, except `EINTR`.
+    pub fn drain(&self) {
+        use std::io::Read as _;
+        let mut buf = [0_u8; 256];
+        loop {
+            match (&self.read).read(&mut buf) {
+                Ok(n) if n > 0 => {}
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                _ => break,
+            }
+        }
+    }
+}

@@ -7,6 +7,7 @@
 #![cfg(mpv_build)]
 
 mod bstr;
+mod cancel;
 mod clib;
 mod dispatch;
 mod fs;

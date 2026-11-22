@@ -30,13 +30,14 @@ mod models {
     /// Runs `f` under loom's exploration with `builder` and prints how many
     /// schedules it ran.
     fn explore(name: &str, builder: &loom::model::Builder, f: impl Fn() + Sync + Send + 'static) {
-        static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let before = RUNS.load(std::sync::atomic::Ordering::SeqCst);
+        // A plain atomic: loom does not see it, and each test has its own.
+        let runs = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = Arc::clone(&runs);
         builder.check(move || {
-            RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             f();
         });
-        let runs = RUNS.load(std::sync::atomic::Ordering::SeqCst) - before;
+        let runs = runs.load(std::sync::atomic::Ordering::SeqCst);
         println!("loom {name}: {runs} schedules explored, all pass");
     }
 
@@ -210,6 +211,98 @@ mod models {
             let t = target(&q);
             dispatch::mp_dispatch_interrupt(&q);
             t.join().unwrap();
+        });
+    }
+
+    /// `mp_cancel_trigger` against `mp_cancel_wait` without a timeout: the
+    /// wakeup is never lost.
+    #[test]
+    fn cancel_wait_trigger() {
+        explore("cancel_wait_trigger", &every(), || {
+            let c = thread_tools::mp_cancel_new();
+            let c2 = Arc::clone(&c);
+            let t = thread::spawn(move || thread_tools::mp_cancel_trigger(&c2));
+            assert!(thread_tools::mp_cancel_wait(&c, FOREVER));
+            t.join().unwrap();
+        });
+    }
+
+    /// `mp_cancel_set_parent` against a trigger of the parent: whichever comes
+    /// first, the slave ends up triggered.
+    #[test]
+    fn cancel_parent_trigger() {
+        explore("cancel_parent_trigger", &every(), || {
+            let parent = thread_tools::mp_cancel_new();
+            let slave = thread_tools::mp_cancel_new();
+            let p2 = Arc::clone(&parent);
+            let t = thread::spawn(move || thread_tools::mp_cancel_trigger(&p2));
+            thread_tools::mp_cancel_set_parent(&slave, Some(&parent));
+            t.join().unwrap();
+            assert!(thread_tools::mp_cancel_test(Some(&slave)));
+            thread_tools::mp_cancel_set_parent(&slave, None);
+        });
+    }
+
+    /// A slave moves from one triggered parent to another while both are
+    /// triggered from other threads: it ends up triggered, through the
+    /// trigger or through the retrigger when it is linked.
+    #[test]
+    fn cancel_reparent_while_triggering() {
+        explore("cancel_reparent_while_triggering", &bounded(3), || {
+            let p1 = thread_tools::mp_cancel_new();
+            let p2 = thread_tools::mp_cancel_new();
+            let slave = thread_tools::mp_cancel_new();
+            thread_tools::mp_cancel_set_parent(&slave, Some(&p1));
+            let triggers: Vec<_> = [&p1, &p2]
+                .into_iter()
+                .map(|p| {
+                    let p = Arc::clone(p);
+                    thread::spawn(move || thread_tools::mp_cancel_trigger(&p))
+                })
+                .collect();
+            thread_tools::mp_cancel_set_parent(&slave, Some(&p2));
+            for t in triggers {
+                t.join().unwrap();
+            }
+            assert!(thread_tools::mp_cancel_test(Some(&slave)));
+            thread_tools::mp_cancel_set_parent(&slave, None);
+        });
+    }
+
+    /// `mp_cancel_set_cb` against `mp_cancel_trigger`: the callback runs at
+    /// least once.
+    #[test]
+    fn cancel_cb_trigger() {
+        explore("cancel_cb_trigger", &every(), || {
+            let c = thread_tools::mp_cancel_new();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let c2 = Arc::clone(&c);
+            let t = thread::spawn(move || thread_tools::mp_cancel_trigger(&c2));
+            let k = Arc::clone(&calls);
+            thread_tools::mp_cancel_set_cb(
+                &c,
+                Some(Box::new(move || {
+                    k.fetch_add(1, Ordering::SeqCst);
+                })),
+            );
+            t.join().unwrap();
+            assert!(calls.load(Ordering::SeqCst) >= 1);
+        });
+    }
+
+    /// A trigger and a reset at once: the flag ends as the one that took the
+    /// lock last left it, so a test after both sees one of the two states, and
+    /// a wait with no time sees the same.
+    #[test]
+    fn cancel_trigger_reset() {
+        explore("cancel_trigger_reset", &every(), || {
+            let c = thread_tools::mp_cancel_new();
+            let c2 = Arc::clone(&c);
+            let t = thread::spawn(move || thread_tools::mp_cancel_trigger(&c2));
+            thread_tools::mp_cancel_reset(&c);
+            t.join().unwrap();
+            let now = thread_tools::mp_cancel_test(Some(&c));
+            assert_eq!(thread_tools::mp_cancel_wait(&c, 0.0), now);
         });
     }
 

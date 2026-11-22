@@ -44,6 +44,16 @@ ill-formed UTF-8, long digit runs, `0x` and `0b` prefixes, the limits of
 
 Each test prints `difftest <function>: <n> inputs agree`.
 
+The tests of `dispatch.c`, `thread_pool.c` and `mp_cancel` compare what
+one thread can observe exactly, after every step of a random sequence.
+Where several threads run, they fix what can be fixed (work that waits on
+a gate, a target thread that enters `mp_dispatch_queue_process` only when
+asked) and compare outcomes that do not depend on the schedule; these
+sample schedules and do not explore them. `crates/misc/tests/loom.rs`
+(`make loom`) explores the port's schedules. Each threaded test runs under
+`with_timeout`, so a hang fails the test, and `make difftest` runs under
+`timeout`.
+
 ## Lints
 
 This crate holds the only `unsafe` in the workspace's port: the `extern`
