@@ -15,7 +15,6 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-THREADS = "threaded; see the report"
 # (C file, C function, Rust item or None, note)
 F = []
 
@@ -29,21 +28,20 @@ def add(cfile, names, module=None, note=""):
 add("bstr.c", "bstrcmp bstrcasecmp bstrchr bstrrchr bstrcspn bstrspn bstr_find bstr_lstrip bstr_strip "
     "bstr_split bstr_split_tok bstr_splice bstrtoll bstrtod bstr_splitchar bstr_strip_linebreaks "
     "bstr_eatstart bstr_eatend bstr_lower", "bstr")
-add("bstr.c", "bstr_sscanf", None, "variadic over a scanf format; mpv's callers are outside misc/")
+add("bstr.c", "bstr_sscanf", "bstr")
 add("bstr.c", "bstr_parse_utf8_code_length bstr_decode_partial_utf8 bstr_decode_utf8 bstr_split_utf8 "
     "bstr_validate_utf8 bstr_sanitize_utf8_latin1 resize_append bstr_xappend", "bstr")
-add("bstr.c", "bstr_xappend_asprintf bstr_xappend_vasprintf", None,
-    "variadic over a printf format; the port formats at each call site (cfloat::format_d, format_f)")
+add("bstr.c", "bstr_xappend_asprintf bstr_xappend_vasprintf", "bstr")
 add("bstr.c", "bstr_case_startswith bstr_case_endswith h_to_i bstr_decode_hex bstr_find_in_list0 bstr_in_list0",
     "bstr")
 add("charset_conv.c", "mp_charset_is_utf8 mp_charset_is_utf16 ms_bom_guess mp_charset_guess mp_iconv_to_utf8",
     "charset_conv")
 add("codepoint_width.c", "ucdLookup=ucd_lookup ucdGraphemeJoins=ucd_grapheme_joins ucdGraphemeDone=ucd_grapheme_done "
     "ucdToCharacterWidth=ucd_to_character_width is_valid_partial_sequence term_disp_width", "codepoint_width")
-add("dispatch.c", "queue_dtor mp_dispatch_create mp_dispatch_set_wakeup_fn mp_dispatch_set_onlock_fn "
-    "mp_dispatch_append mp_dispatch_enqueue mp_dispatch_enqueue_autofree mp_dispatch_enqueue_notify "
-    "mp_dispatch_cancel_fn mp_dispatch_run mp_dispatch_queue_process mp_dispatch_interrupt "
-    "mp_dispatch_adjust_timeout mp_dispatch_lock mp_dispatch_unlock", None, THREADS)
+add("dispatch.c", "queue_dtor=MpDispatchQueue::drop mp_dispatch_create mp_dispatch_set_wakeup_fn "
+    "mp_dispatch_set_onlock_fn mp_dispatch_append mp_dispatch_enqueue mp_dispatch_enqueue_autofree "
+    "mp_dispatch_enqueue_notify mp_dispatch_cancel_fn mp_dispatch_run mp_dispatch_queue_process "
+    "mp_dispatch_interrupt mp_dispatch_adjust_timeout mp_dispatch_lock mp_dispatch_unlock", "dispatch")
 add("hash.c", "mp_hash_to_bstr", "hash")
 add("io_utils.c", "mp_mkostemps mp_save_to_file", "io_utils")
 add("json.c", "eat_c eat_ws json_skip_whitespace read_id read_str read_sub json_parse write_json_str add_indent "
@@ -58,12 +56,12 @@ add("path_utils.c", "mp_basename_bstr mp_basename mp_dirname mp_path_strip_trail
     "mp_path_exists mp_path_isdir mp_is_url mp_split_proto mp_mkdirp", "path_utils")
 add("random.c", "rotl_u64 splitmix64 mp_rand_seed mp_rand_next mp_rand_next_double mp_rand_in_range32", "random")
 add("rendezvous.c", "mp_rendezvous", "rendezvous")
-add("thread_pool.c", "worker_thread thread_pool_dtor add_thread mp_thread_pool_create thread_pool_add "
-    "mp_thread_pool_queue mp_thread_pool_run", None, THREADS)
+add("thread_pool.c", "worker_thread thread_pool_dtor=MpThreadPool::drop add_thread mp_thread_pool_create "
+    "thread_pool_add mp_thread_pool_queue mp_thread_pool_run", "thread_pool")
 add("thread_tools.c", "mp_waiter_wait mp_waiter_wakeup mp_waiter_poll", "thread_tools")
-add("thread_tools.c", "cancel_destroy mp_cancel_new trigger_locked mp_cancel_trigger mp_cancel_reset "
-    "mp_cancel_test mp_cancel_wait retrigger_locked mp_cancel_set_cb mp_cancel_set_parent mp_cancel_get_fd",
-    None, THREADS)
+add("thread_tools.c", "cancel_destroy=MpCancel::drop mp_cancel_new trigger_locked mp_cancel_trigger "
+    "mp_cancel_reset mp_cancel_test mp_cancel_wait retrigger_locked mp_cancel_set_cb mp_cancel_set_parent "
+    "mp_cancel_get_fd", "thread_tools")
 assert len(F) == 141, len(F)
 
 # Why Aeneas has no body for a ported function.
@@ -74,14 +72,47 @@ NO_BODY = {
     "thread_tools::mp_waiter_wait": "rejected: `Mutex`, `Condvar`",
     "thread_tools::mp_waiter_wakeup": "rejected: `Mutex`, `Condvar`",
     "thread_tools::mp_waiter_poll": "rejected: `Mutex`, `Condvar`",
+    "bstr::bstr_sscanf": "left out: `f32` and `f64` in `ScanArg`",
 }
+# dispatch.c, thread_pool.c and mp_cancel: boxed closures ("Dynamic trait
+# types are not supported yet"), Mutex, Condvar and atomics ("Unimplemented");
+# with them in, Aeneas stops with a fatal error, so translate.sh leaves them
+# out.
+THREADED = "rejected: `dyn` closures, `Mutex`, `Condvar`"
+for _cfile, _c, _rust, _note in F:
+    if _rust and (_rust.startswith(("dispatch::", "thread_pool::"))
+                  or (_rust.startswith("thread_tools::") and "waiter" not in _rust)):
+        NO_BODY[_rust] = THREADED
 LOOP_AXIOM = "axiom: Lean rejects recursion through `loop`"
 # Tests that cover several functions under one line, or a line under another name.
 TEST_ALIAS = {
     "mp_waiter_wait": "mp_waiter_wait, mp_waiter_wakeup, mp_waiter_poll",
     "mp_waiter_wakeup": "mp_waiter_wait, mp_waiter_wakeup, mp_waiter_poll",
     "mp_waiter_poll": "mp_waiter_wait, mp_waiter_wakeup, mp_waiter_poll",
+    "bstr_sscanf": "bstr_sscanf (mpv's callers' formats)",
+    "bstr_xappend_asprintf": "bstr_xappend_asprintf, bstr_xappend_vasprintf",
+    "bstr_xappend_vasprintf": "bstr_xappend_asprintf, bstr_xappend_vasprintf",
+    "mp_dispatch_set_onlock_fn": "mp_dispatch_set_onlock_fn, mp_dispatch_lock, mp_dispatch_unlock (handshake)",
+    "mp_dispatch_lock": "mp_dispatch_set_onlock_fn, mp_dispatch_lock, mp_dispatch_unlock (handshake)",
+    "mp_dispatch_unlock": "mp_dispatch_set_onlock_fn, mp_dispatch_lock, mp_dispatch_unlock (handshake)",
+    "mp_dispatch_run": "mp_dispatch_run, mp_dispatch_lock, mp_dispatch_unlock (stress, 4 threads)",
 }
+for _c in ("queue_dtor mp_dispatch_create mp_dispatch_set_wakeup_fn mp_dispatch_append mp_dispatch_enqueue "
+           "mp_dispatch_enqueue_autofree mp_dispatch_enqueue_notify mp_dispatch_cancel_fn "
+           "mp_dispatch_queue_process mp_dispatch_interrupt").split():
+    TEST_ALIAS[_c] = ("mp_dispatch_create, mp_dispatch_set_wakeup_fn, mp_dispatch_append, mp_dispatch_enqueue, "
+                      "mp_dispatch_enqueue_autofree, mp_dispatch_enqueue_notify, mp_dispatch_cancel_fn, "
+                      "mp_dispatch_queue_process, mp_dispatch_interrupt, mp_dispatch_adjust_timeout, "
+                      "queue_dtor (sequences)")
+for _c in ("worker_thread thread_pool_dtor add_thread mp_thread_pool_create thread_pool_add "
+           "mp_thread_pool_queue mp_thread_pool_run").split():
+    TEST_ALIAS[_c] = ("mp_thread_pool_create, add_thread, thread_pool_add, mp_thread_pool_queue, "
+                      "mp_thread_pool_run, worker_thread, thread_pool_dtor (growth)")
+for _c in ("cancel_destroy mp_cancel_new trigger_locked mp_cancel_trigger mp_cancel_reset mp_cancel_test "
+           "mp_cancel_wait retrigger_locked mp_cancel_set_cb mp_cancel_set_parent mp_cancel_get_fd").split():
+    TEST_ALIAS[_c] = ("mp_cancel_new, trigger_locked, mp_cancel_trigger, mp_cancel_reset, mp_cancel_test, "
+                      "mp_cancel_wait, retrigger_locked, mp_cancel_set_cb, mp_cancel_set_parent, "
+                      "mp_cancel_get_fd, cancel_destroy (operations)")
 UNTESTED = {
     "resize_append": "not testable: only manages capacity",
 }

@@ -35,13 +35,21 @@ run `status.py`.
 
 ## What is opaque, and why
 
-- `rmpv_misc::cfloat` (`strtod`, `printf` conversions) and `rmpv_misc::os`
-  (system calls): library and system calls, declarations on the C side too.
+- `rmpv_misc::cfloat` (`strtod`, `strtof`, `printf` conversions),
+  `rmpv_misc::cprintf` (the `printf` engine of `bstr_xappend_asprintf`) and
+  `rmpv_misc::os` (system calls): library and system calls, declarations on
+  the C side too. A derived `Clone` in `cprintf` stops Aeneas with an
+  internal error even there, so its `Clone` impls are written out.
 - `bstr::bstrtod` and `random::mp_rand_next_double` are left out entirely:
   their signatures have an `f64`, and the Aeneas library has no float type.
-- `thread_tools` and `rendezvous` are left out as well. They use `Mutex`
-  and `Condvar`; Aeneas reports `Unimplemented` for each function body and
-  emits declarations for the std types that do not type-check.
+- `thread_tools`, `rendezvous`, `threads`, `dispatch` and `thread_pool`
+  are left out as well. They use `Mutex` and `Condvar`, for which Aeneas
+  reports `Unimplemented` and emits declarations that do not type-check,
+  and `dispatch`, `thread_pool` and `mp_cancel` hold boxed closures
+  ("Dynamic trait types are not supported yet"). With these modules in,
+  Aeneas stops with a fatal error and writes no Lean file.
+- `cscanf` (the `scanf` engine) and `bstr::bstr_sscanf` are left out:
+  their argument type holds `&mut f32` and `&mut f64`.
 - In `MiscLoops` only, the three tree walkers named above. Lean cannot show
   that a function is well defined when it calls itself from inside `loop`
   ("could not prove ... to be monotone in its recursive calls").

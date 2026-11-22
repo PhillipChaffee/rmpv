@@ -539,10 +539,11 @@ pub fn bstr_xappend_vasprintf(
     // buffer if it did not fit; both produce the same bytes.
     let text = cprintf::vsnprintf(fmt, args)?;
     let size = text.len();
-    let avail = s.capacity() - s.len();
-    if avail < 1 || size + 1 > avail {
-        resize_append(s, size + 1);
-    }
+    // The C grows the buffer if `avail < 1 || size + 1 > avail`, where
+    // `avail` is the free space. That is the test resize_append makes
+    // itself (the first case implies the second), so it is called without
+    // it: Aeneas cannot join the paths of an `if` around the call here.
+    resize_append(s, size + 1);
     s.extend_from_slice(&text);
     Ok(size as i32)
 }

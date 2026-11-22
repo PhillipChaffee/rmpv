@@ -29,7 +29,8 @@ const INT_MAX: u64 = i32::MAX as u64;
 
 /// One argument of a C variadic call, after the default argument promotions.
 /// The sizes are those of x86-64 Linux (LP64).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy)]
+#[cfg_attr(not(aeneas), derive(Debug, PartialEq, Eq))]
 pub enum CArg<'a> {
     /// `int`, and `char`, `short` and `bool` promoted to it.
     Int(i32),
@@ -50,8 +51,21 @@ pub enum CArg<'a> {
     Ptr(usize),
 }
 
+// The `Clone` impls are written out: Charon's translation of a derived
+// `Clone` stops Aeneas with an internal error, even in an opaque module.
+#[expect(
+    clippy::expl_impl_clone_on_copy,
+    reason = "a derived Clone stops Aeneas; see above"
+)]
+impl Clone for CArg<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 /// Why [`vsnprintf`] produced no output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy)]
+#[cfg_attr(not(aeneas), derive(Debug, PartialEq, Eq))]
 pub enum PrintfError {
     /// glibc fails too: `vsnprintf` returns -1 with this `errno`
     /// ([`EINVAL`] or [`EOVERFLOW`]).
@@ -62,6 +76,16 @@ pub enum PrintfError {
     /// The argument with this index is missing, or is not of the kind its
     /// conversion reads. In C this is undefined behaviour.
     BadArgument(usize),
+}
+
+#[expect(
+    clippy::expl_impl_clone_on_copy,
+    reason = "a derived Clone stops Aeneas; see above"
+)]
+impl Clone for PrintfError {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 /// The output being built. Padding is kept as a run, so that a width or
@@ -122,7 +146,7 @@ impl Out {
     clippy::struct_excessive_bools,
     reason = "glibc's printf_info flags, one for each flag character"
 )]
-#[derive(Clone, Copy)]
+#[derive(Copy)]
 struct Spec {
     alt: bool,
     space: bool,
@@ -140,7 +164,7 @@ struct Spec {
     clippy::struct_excessive_bools,
     reason = "glibc's own four flags; `hh` and `h` exclude each other, `L` implies `l`"
 )]
-#[derive(Clone, Copy, Default)]
+#[derive(Copy)]
 struct Length {
     is_char: bool,
     is_short: bool,
@@ -152,6 +176,26 @@ struct Length {
 /// `int`, as the compiled C does.
 fn sub(width: i32, n: i64) -> i32 {
     (width as i64).wrapping_sub(n) as i32
+}
+
+#[expect(
+    clippy::expl_impl_clone_on_copy,
+    reason = "a derived Clone stops Aeneas; see above"
+)]
+impl Clone for Spec {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[expect(
+    clippy::expl_impl_clone_on_copy,
+    reason = "a derived Clone stops Aeneas; see above"
+)]
+impl Clone for Length {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 /// glibc's `read_int`: the decimal number at `f[*i]`, or `None` above
@@ -393,7 +437,12 @@ fn parse_spec(
 /// table for what may follow: 2 after none, 3 after one `h`, 4 after one
 /// `l`, 5 after a complete modifier.
 fn parse_length(fmt: &[u8], start: usize, i: &mut usize) -> Result<(Length, u8), PrintfError> {
-    let mut len = Length::default();
+    let mut len = Length {
+        is_char: false,
+        is_short: false,
+        is_long: false,
+        is_long_double: false,
+    };
     let mut step = 2;
     loop {
         let c = at(fmt, *i);
@@ -715,7 +764,8 @@ fn special_word(s: Spec, bits: u64) -> Option<[u8; 3]> {
 /// even, which is what glibc does in the default rounding mode. Digits
 /// beyond what a double can have are zeros, written as a count to pad
 /// with.
-fn fixed_digits(magnitude: f64, prec: i64) -> (Vec<u8>, i64) {
+fn fixed_digits(magnitude: u64, prec: i64) -> (Vec<u8>, i64) {
+    let magnitude = f64::from_bits(magnitude);
     let exact = prec.min(MAX_FRAC_DIGITS);
     let text = format!("{magnitude:.*}", exact as usize);
     (text.into_bytes(), prec - exact)
@@ -724,7 +774,8 @@ fn fixed_digits(magnitude: f64, prec: i64) -> (Vec<u8>, i64) {
 /// The significant digits of `|x|` rounded to `prec + 1` of them, and the
 /// decimal exponent of the first: `|x| ~ d.ddd * 10^exp`. Zero has exponent
 /// 0. Digits beyond what a double can have are zeros, given as a count.
-fn exp_digits(magnitude: f64, prec: i64) -> (Vec<u8>, i64, i64) {
+fn exp_digits(magnitude: u64, prec: i64) -> (Vec<u8>, i64, i64) {
+    let magnitude = f64::from_bits(magnitude);
     let exact = prec.min(MAX_SIG_DIGITS);
     let text = format!("{magnitude:.*e}", exact as usize);
     let (mantissa, exp) = text.split_once('e').unwrap_or((&text, "0"));
@@ -751,7 +802,8 @@ fn float(out: &mut Out, s: Spec, bits: u64) {
         special(out, s, negative, word);
         return;
     }
-    let magnitude = f64::from_bits(bits & !SIGN_BIT);
+    // The bits of |x|; a double crosses function boundaries as its bits.
+    let magnitude = bits & !SIGN_BIT;
     // The body as bytes, then a run of zeros to append that may be too long
     // to hold, then the exponent.
     let mut body: Vec<u8>;

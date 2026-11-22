@@ -23,20 +23,31 @@ out="$(mkdir -p "${1:-$here/out}" && cd "${1:-$here/out}" && pwd)"
 crate="$here/../../crates/misc"
 
 # Aeneas has no float type. The two functions whose signature has an `f64`
-# are left out. The module of C library stand-ins that need floats or
-# formatting stays opaque: its functions become declarations without a body,
-# which is what a C library call is on the C side too. So does the module
-# of system calls.
+# are left out. The modules of C library stand-ins that need floats or
+# formatting (cfloat, and cprintf, the printf engine) stay opaque: their
+# functions become declarations without a body, which is what a C library
+# call is on the C side too. So does the module of system calls.
 exclude=(
   rmpv_misc::bstr::bstrtod
   rmpv_misc::random::mp_rand_next_double
   # Mutex and Condvar: Aeneas reports "Unimplemented" for each function
   # body, and the declarations it emits for the std types do not type-check.
+  # dispatch, thread_pool and mp_cancel also hold boxed closures ("Dynamic
+  # trait types are not supported yet"); with these modules in, Aeneas stops
+  # with a fatal error and writes no file.
   rmpv_misc::thread_tools::_
   rmpv_misc::rendezvous::_
+  rmpv_misc::threads::_
+  rmpv_misc::dispatch::_
+  rmpv_misc::thread_pool::_
+  # The scanf engine stores through &mut f32 and &mut f64; there is no float
+  # type in Aeneas's library.
+  rmpv_misc::cscanf::_
+  rmpv_misc::bstr::bstr_sscanf
 )
 opaque=(
   rmpv_misc::cfloat::_
+  rmpv_misc::cprintf::_
   rmpv_misc::os::_
 )
 args=()

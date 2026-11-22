@@ -57,25 +57,25 @@ axiom alloc.vec.Vec.truncate
   alloc.vec.Vec T → Std.Usize → Result (alloc.vec.Vec T)
 
 /-- [rmpv_misc::bstr::BSTR_DECODE_OUT_OF_RANGE]
-    Source: 'crates/misc/src/bstr.rs', lines 13:0-13:45
+    Source: 'crates/misc/src/bstr.rs', lines 15:0-15:45
     Visibility: public -/
 @[global_simps, irreducible]
 def bstr.BSTR_DECODE_OUT_OF_RANGE : Std.I32 := (-1)#i32
 
 /-- [rmpv_misc::bstr::BSTR_DECODE_TRUNCATED_SEQUENCE]
-    Source: 'crates/misc/src/bstr.rs', lines 14:0-14:51
+    Source: 'crates/misc/src/bstr.rs', lines 16:0-16:51
     Visibility: public -/
 @[global_simps, irreducible]
 def bstr.BSTR_DECODE_TRUNCATED_SEQUENCE : Std.I32 := (-2)#i32
 
 /-- [rmpv_misc::bstr::BSTR_DECODE_OVERLONG_ENCODING]
-    Source: 'crates/misc/src/bstr.rs', lines 15:0-15:50
+    Source: 'crates/misc/src/bstr.rs', lines 17:0-17:50
     Visibility: public -/
 @[global_simps, irreducible]
 def bstr.BSTR_DECODE_OVERLONG_ENCODING : Std.I32 := (-3)#i32
 
 /-- [rmpv_misc::bstr::WHITESPACE]
-    Source: 'crates/misc/src/bstr.rs', lines 18:0-18:49
+    Source: 'crates/misc/src/bstr.rs', lines 20:0-20:49
     Visibility: public -/
 @[global_simps, irreducible]
 def bstr.WHITESPACE : Slice Std.U8 :=
@@ -125,20 +125,20 @@ def clib.strndup
   alloc.slice.Slice.to_vec core.clone.CloneU8 s1
 
 /-- [rmpv_misc::bstr::bstrdup0]:
-    Source: 'crates/misc/src/bstr.rs', lines 22:0-24:1
+    Source: 'crates/misc/src/bstr.rs', lines 24:0-26:1
     Visibility: public -/
 def bstr.bstrdup0 (s : Slice Std.U8) : Result (alloc.vec.Vec Std.U8) := do
   let i := Slice.len s
   clib.strndup s i
 
 /-- [rmpv_misc::bstr::bstrto0]:
-    Source: 'crates/misc/src/bstr.rs', lines 28:0-30:1
+    Source: 'crates/misc/src/bstr.rs', lines 30:0-32:1
     Visibility: public -/
 def bstr.bstrto0 (s : Slice Std.U8) : Result (alloc.vec.Vec Std.U8) := do
   bstr.bstrdup0 s
 
 /-- [rmpv_misc::bstr::bstrdup]:
-    Source: 'crates/misc/src/bstr.rs', lines 34:0-36:1
+    Source: 'crates/misc/src/bstr.rs', lines 36:0-38:1
     Visibility: public -/
 def bstr.bstrdup (s : Slice Std.U8) : Result (alloc.vec.Vec Std.U8) := do
   alloc.slice.Slice.to_vec core.clone.CloneU8 s
@@ -187,7 +187,7 @@ def clib.cstr (s : Slice Std.U8) : Result (Slice Std.U8) := do
     Std.U8) s { «end» := i }
 
 /-- [rmpv_misc::bstr::bstr0]:
-    Source: 'crates/misc/src/bstr.rs', lines 40:0-42:1
+    Source: 'crates/misc/src/bstr.rs', lines 42:0-44:1
     Visibility: public -/
 def bstr.bstr0 (s : Slice Std.U8) : Result (Slice Std.U8) := do
   clib.cstr s
@@ -235,7 +235,7 @@ def clib.memcmp
   clib.memcmp_loop a b n 0#usize
 
 /-- [rmpv_misc::bstr::bstrcmp]:
-    Source: 'crates/misc/src/bstr.rs', lines 47:0-62:1
+    Source: 'crates/misc/src/bstr.rs', lines 49:0-64:1
     Visibility: public -/
 def bstr.bstrcmp
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Std.I32 := do
@@ -334,7 +334,7 @@ def clib.strncasecmp
   clib.strncasecmp_loop a b n 0#usize
 
 /-- [rmpv_misc::bstr::bstrcasecmp]:
-    Source: 'crates/misc/src/bstr.rs', lines 67:0-82:1
+    Source: 'crates/misc/src/bstr.rs', lines 69:0-84:1
     Visibility: public -/
 def bstr.bstrcasecmp
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Std.I32 := do
@@ -406,7 +406,7 @@ def clib.memchr
   clib.memchr_loop s c n 0#usize
 
 /-- [rmpv_misc::bstr::bstrchr]:
-    Source: 'crates/misc/src/bstr.rs', lines 86:0-94:1
+    Source: 'crates/misc/src/bstr.rs', lines 88:0-96:1
     Visibility: public -/
 def bstr.bstrchr (s : Slice Std.U8) (c : Std.I32) : Result Std.I32 := do
   let b ← core.slice.Slice.is_empty s
@@ -460,7 +460,7 @@ def clib.memrchr
   clib.memrchr_loop s c n
 
 /-- [rmpv_misc::bstr::bstrrchr]:
-    Source: 'crates/misc/src/bstr.rs', lines 98:0-106:1
+    Source: 'crates/misc/src/bstr.rs', lines 100:0-108:1
     Visibility: public -/
 def bstr.bstrrchr (s : Slice Std.U8) (c : Std.I32) : Result Std.I32 := do
   let b ← core.slice.Slice.is_empty s
@@ -512,7 +512,7 @@ def clib.strchr
   clib.strchr_loop s c 0#usize
 
 /-- [rmpv_misc::bstr::bstrcspn]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 113:4-118:5
+    Source: 'crates/misc/src/bstr.rs', lines 115:4-120:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstrcspn_loop.body
@@ -534,7 +534,7 @@ def bstr.bstrcspn_loop.body
   else ok (done i)
 
 /-- [rmpv_misc::bstr::bstrcspn]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 113:4-118:5
+    Source: 'crates/misc/src/bstr.rs', lines 115:4-120:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstrcspn_loop
@@ -546,7 +546,7 @@ def bstr.bstrcspn_loop
     i
 
 /-- [rmpv_misc::bstr::bstrcspn]:
-    Source: 'crates/misc/src/bstr.rs', lines 111:0-120:1
+    Source: 'crates/misc/src/bstr.rs', lines 113:0-122:1
     Visibility: public -/
 @[reducible]
 def bstr.bstrcspn
@@ -554,7 +554,7 @@ def bstr.bstrcspn
   bstr.bstrcspn_loop s reject 0#i32
 
 /-- [rmpv_misc::bstr::bstrspn]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 126:4-131:5
+    Source: 'crates/misc/src/bstr.rs', lines 128:4-133:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstrspn_loop.body
@@ -576,7 +576,7 @@ def bstr.bstrspn_loop.body
   else ok (done i)
 
 /-- [rmpv_misc::bstr::bstrspn]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 126:4-131:5
+    Source: 'crates/misc/src/bstr.rs', lines 128:4-133:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstrspn_loop
@@ -588,7 +588,7 @@ def bstr.bstrspn_loop
     i
 
 /-- [rmpv_misc::bstr::bstrspn]:
-    Source: 'crates/misc/src/bstr.rs', lines 124:0-133:1
+    Source: 'crates/misc/src/bstr.rs', lines 126:0-135:1
     Visibility: public -/
 @[reducible]
 def bstr.bstrspn
@@ -596,7 +596,7 @@ def bstr.bstrspn
   bstr.bstrspn_loop s accept 0#i32
 
 /-- [rmpv_misc::bstr::bstr_startswith]:
-    Source: 'crates/misc/src/bstr.rs', lines 594:0-599:1
+    Source: 'crates/misc/src/bstr.rs', lines 647:0-652:1
     Visibility: public -/
 def bstr.bstr_startswith
   (s : Slice Std.U8) («prefix» : Slice Std.U8) : Result Bool := do
@@ -610,7 +610,7 @@ def bstr.bstr_startswith
     ok (i3 = 0#i32)
 
 /-- [rmpv_misc::bstr::bstr_splice]:
-    Source: 'crates/misc/src/bstr.rs', lines 204:0-230:1
+    Source: 'crates/misc/src/bstr.rs', lines 206:0-232:1
     Visibility: public -/
 def bstr.bstr_splice
   (s : Slice Std.U8) (start : Std.I32) («end» : Std.I32) :
@@ -666,7 +666,7 @@ def bstr.bstr_splice
         Std.U8) s { start := i4, «end» := i5 }
 
 /-- [rmpv_misc::bstr::bstr_find]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 139:4-146:1
+    Source: 'crates/misc/src/bstr.rs', lines 141:4-148:1
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_find_loop.body
@@ -688,7 +688,7 @@ def bstr.bstr_find_loop.body
   else ok (done (-1)#i32)
 
 /-- [rmpv_misc::bstr::bstr_find]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 139:4-146:1
+    Source: 'crates/misc/src/bstr.rs', lines 141:4-148:1
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_find_loop
@@ -700,7 +700,7 @@ def bstr.bstr_find_loop
     i
 
 /-- [rmpv_misc::bstr::bstr_find]:
-    Source: 'crates/misc/src/bstr.rs', lines 137:0-146:1
+    Source: 'crates/misc/src/bstr.rs', lines 139:0-148:1
     Visibility: public -/
 @[reducible]
 def bstr.bstr_find
@@ -727,7 +727,7 @@ def ctype.mp_isspace (c : Std.U8) : Result Bool := do
              else ok (c = 11#u8)
 
 /-- [rmpv_misc::bstr::bstr_lstrip]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 152:4-154:5
+    Source: 'crates/misc/src/bstr.rs', lines 154:4-156:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_lstrip_loop.body
@@ -746,7 +746,7 @@ def bstr.bstr_lstrip_loop.body
   else ok (done i)
 
 /-- [rmpv_misc::bstr::bstr_lstrip]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 152:4-154:5
+    Source: 'crates/misc/src/bstr.rs', lines 154:4-156:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_lstrip_loop
@@ -756,7 +756,7 @@ def bstr.bstr_lstrip_loop
     i
 
 /-- [rmpv_misc::bstr::bstr_lstrip]:
-    Source: 'crates/misc/src/bstr.rs', lines 150:0-156:1
+    Source: 'crates/misc/src/bstr.rs', lines 152:0-158:1
     Visibility: public -/
 def bstr.bstr_lstrip (s : Slice Std.U8) : Result (Slice Std.U8) := do
   let i ← bstr.bstr_lstrip_loop s 0#usize
@@ -764,7 +764,7 @@ def bstr.bstr_lstrip (s : Slice Std.U8) : Result (Slice Std.U8) := do
     Std.U8) s { start := i }
 
 /-- [rmpv_misc::bstr::bstr_strip]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 163:4-165:5
+    Source: 'crates/misc/src/bstr.rs', lines 165:4-167:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_strip_loop.body
@@ -782,7 +782,7 @@ def bstr.bstr_strip_loop.body
   else ok (done len)
 
 /-- [rmpv_misc::bstr::bstr_strip]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 163:4-165:5
+    Source: 'crates/misc/src/bstr.rs', lines 165:4-167:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_strip_loop
@@ -792,7 +792,7 @@ def bstr.bstr_strip_loop
     len
 
 /-- [rmpv_misc::bstr::bstr_strip]:
-    Source: 'crates/misc/src/bstr.rs', lines 160:0-167:1
+    Source: 'crates/misc/src/bstr.rs', lines 162:0-169:1
     Visibility: public -/
 def bstr.bstr_strip (s : Slice Std.U8) : Result (Slice Std.U8) := do
   let s1 ← bstr.bstr_lstrip s
@@ -802,7 +802,7 @@ def bstr.bstr_strip (s : Slice Std.U8) : Result (Slice Std.U8) := do
     Std.U8) s1 { «end» := len1 }
 
 /-- [rmpv_misc::bstr::bstr_cut]:
-    Source: 'crates/misc/src/bstr.rs', lines 578:0-590:1
+    Source: 'crates/misc/src/bstr.rs', lines 631:0-643:1
     Visibility: public -/
 def bstr.bstr_cut
   (s : Slice Std.U8) (n : Std.I32) : Result (Slice Std.U8) := do
@@ -830,7 +830,7 @@ def bstr.bstr_cut
     Std.U8) s { start := i2 }
 
 /-- [rmpv_misc::bstr::bstr_split]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 174:4-179:5
+    Source: 'crates/misc/src/bstr.rs', lines 176:4-181:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_split_loop.body
@@ -852,7 +852,7 @@ def bstr.bstr_split_loop.body
   else ok (done start)
 
 /-- [rmpv_misc::bstr::bstr_split]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 174:4-179:5
+    Source: 'crates/misc/src/bstr.rs', lines 176:4-181:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_split_loop
@@ -864,7 +864,7 @@ def bstr.bstr_split_loop
     start
 
 /-- [rmpv_misc::bstr::bstr_split]:
-    Source: 'crates/misc/src/bstr.rs', lines 172:0-184:1
+    Source: 'crates/misc/src/bstr.rs', lines 174:0-186:1
     Visibility: public -/
 def bstr.bstr_split
   (s : Slice Std.U8) (sep : Slice Std.U8) :
@@ -878,7 +878,7 @@ def bstr.bstr_split
   ok (s2, rest)
 
 /-- [rmpv_misc::bstr::bstr_split_tok]:
-    Source: 'crates/misc/src/bstr.rs', lines 188:0-197:1
+    Source: 'crates/misc/src/bstr.rs', lines 190:0-199:1
     Visibility: public -/
 def bstr.bstr_split_tok
   (s : Slice Std.U8) (tok : Slice Std.U8) :
@@ -1302,7 +1302,7 @@ def clib.strtoll
               ok { value, consumed, erange := false }
 
 /-- [rmpv_misc::bstr::bstrtoll]:
-    Source: 'crates/misc/src/bstr.rs', lines 238:0-243:1
+    Source: 'crates/misc/src/bstr.rs', lines 240:0-245:1
     Visibility: public -/
 def bstr.bstrtoll
   (s : Slice Std.U8) (base : Std.I32) :
@@ -1320,7 +1320,7 @@ def bstr.bstrtoll
   ok (r.value, s3)
 
 /-- [rmpv_misc::bstr::bstr_splitchar]:
-    Source: 'crates/misc/src/bstr.rs', lines 259:0-268:1
+    Source: 'crates/misc/src/bstr.rs', lines 261:0-270:1
     Visibility: public -/
 def bstr.bstr_splitchar
   (s : Slice Std.U8) (c : Std.U8) :
@@ -1340,14 +1340,14 @@ def bstr.bstr_splitchar
   ok (s1, rest)
 
 /-- [rmpv_misc::bstr::bstr_getline]:
-    Source: 'crates/misc/src/bstr.rs', lines 272:0-274:1
+    Source: 'crates/misc/src/bstr.rs', lines 274:0-276:1
     Visibility: public -/
 def bstr.bstr_getline
   (s : Slice Std.U8) : Result ((Slice Std.U8) × (Slice Std.U8)) := do
   bstr.bstr_splitchar s 10#u8
 
 /-- [rmpv_misc::bstr::bstr_endswith]:
-    Source: 'crates/misc/src/bstr.rs', lines 609:0-614:1
+    Source: 'crates/misc/src/bstr.rs', lines 662:0-667:1
     Visibility: public -/
 def bstr.bstr_endswith
   (s : Slice Std.U8) (suffix : Slice Std.U8) : Result Bool := do
@@ -1368,7 +1368,7 @@ def bstr.bstr_endswith
     ok (i6 = 0#i32)
 
 /-- [rmpv_misc::bstr::bstr_endswith0]:
-    Source: 'crates/misc/src/bstr.rs', lines 618:0-620:1
+    Source: 'crates/misc/src/bstr.rs', lines 671:0-673:1
     Visibility: public -/
 def bstr.bstr_endswith0
   (s : Slice Std.U8) (suffix : Slice Std.U8) : Result Bool := do
@@ -1376,7 +1376,7 @@ def bstr.bstr_endswith0
   bstr.bstr_endswith s s1
 
 /-- [rmpv_misc::bstr::bstr_strip_linebreaks]:
-    Source: 'crates/misc/src/bstr.rs', lines 278:0-286:1
+    Source: 'crates/misc/src/bstr.rs', lines 280:0-288:1
     Visibility: public -/
 def bstr.bstr_strip_linebreaks (s : Slice Std.U8) : Result (Slice Std.U8) := do
   let s1 ← lift (Array.to_slice (Array.make 2#usize [ 13#u8, 10#u8 ]))
@@ -1399,7 +1399,7 @@ def bstr.bstr_strip_linebreaks (s : Slice Std.U8) : Result (Slice Std.U8) := do
     else ok s
 
 /-- [rmpv_misc::bstr::bstr_eatstart]:
-    Source: 'crates/misc/src/bstr.rs', lines 291:0-296:1
+    Source: 'crates/misc/src/bstr.rs', lines 293:0-298:1
     Visibility: public -/
 def bstr.bstr_eatstart
   (s : Slice Std.U8) («prefix» : Slice Std.U8) :
@@ -1415,7 +1415,7 @@ def bstr.bstr_eatstart
   else ok (false, s)
 
 /-- [rmpv_misc::bstr::bstr_eatend]:
-    Source: 'crates/misc/src/bstr.rs', lines 300:0-305:1
+    Source: 'crates/misc/src/bstr.rs', lines 302:0-307:1
     Visibility: public -/
 def bstr.bstr_eatend
   (s : Slice Std.U8) («prefix» : Slice Std.U8) :
@@ -1453,7 +1453,7 @@ def ctype.mp_tolower (c : Std.U8) : Result Std.U8 := do
   else ok c
 
 /-- [rmpv_misc::bstr::bstr_lower]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 310:4-313:5
+    Source: 'crates/misc/src/bstr.rs', lines 312:4-315:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_lower_loop.body
@@ -1474,7 +1474,7 @@ def bstr.bstr_lower_loop.body
   else ok (done s)
 
 /-- [rmpv_misc::bstr::bstr_lower]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 310:4-313:5
+    Source: 'crates/misc/src/bstr.rs', lines 312:4-315:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_lower_loop
@@ -1484,7 +1484,7 @@ def bstr.bstr_lower_loop
     (s, i)
 
 /-- [rmpv_misc::bstr::bstr_lower]:
-    Source: 'crates/misc/src/bstr.rs', lines 308:0-314:1
+    Source: 'crates/misc/src/bstr.rs', lines 310:0-316:1
     Visibility: public -/
 @[reducible]
 def bstr.bstr_lower (s : Slice Std.U8) : Result (Slice Std.U8) := do
@@ -1500,7 +1500,7 @@ def common.mp_log2 (v : Std.U32) : Result Std.U32 := do
        31#u32 - i
 
 /-- [rmpv_misc::bstr::bstr_parse_utf8_code_length]:
-    Source: 'crates/misc/src/bstr.rs', lines 318:0-324:1
+    Source: 'crates/misc/src/bstr.rs', lines 331:0-337:1
     Visibility: public -/
 def bstr.bstr_parse_utf8_code_length (b : Std.U8) : Result Std.I32 := do
   if b < 128#u8
@@ -1518,7 +1518,7 @@ def bstr.bstr_parse_utf8_code_length (b : Std.U8) : Result Std.I32 := do
     else ok (-1)#i32
 
 /-- [rmpv_misc::bstr::bstr_decode_partial_utf8]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 343:8-369:1
+    Source: 'crates/misc/src/bstr.rs', lines 356:8-382:1
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_decode_partial_utf8_loop.body
@@ -1620,7 +1620,7 @@ def bstr.bstr_decode_partial_utf8_loop.body
           ok (done (i, s1))
 
 /-- [rmpv_misc::bstr::bstr_decode_partial_utf8]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 343:8-369:1
+    Source: 'crates/misc/src/bstr.rs', lines 356:8-382:1
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_decode_partial_utf8_loop
@@ -1634,7 +1634,7 @@ def bstr.bstr_decode_partial_utf8_loop
     (codepoint, pos, n)
 
 /-- [rmpv_misc::bstr::bstr_decode_partial_utf8]:
-    Source: 'crates/misc/src/bstr.rs', lines 330:0-369:1
+    Source: 'crates/misc/src/bstr.rs', lines 343:0-382:1
     Visibility: public -/
 def bstr.bstr_decode_partial_utf8
   (s : Slice Std.U8) : Result (Std.I32 × (Slice Std.U8)) := do
@@ -1668,7 +1668,7 @@ def bstr.bstr_decode_partial_utf8
       ok (i1, s1)
 
 /-- [rmpv_misc::bstr::bstr_decode_utf8]:
-    Source: 'crates/misc/src/bstr.rs', lines 378:0-384:1
+    Source: 'crates/misc/src/bstr.rs', lines 391:0-397:1
     Visibility: public -/
 def bstr.bstr_decode_utf8
   (s : Slice Std.U8) : Result (Std.I32 × (Slice Std.U8)) := do
@@ -1678,7 +1678,7 @@ def bstr.bstr_decode_utf8
   else ok (res, s)
 
 /-- [rmpv_misc::bstr::bstr_split_utf8]:
-    Source: 'crates/misc/src/bstr.rs', lines 390:0-396:1
+    Source: 'crates/misc/src/bstr.rs', lines 403:0-409:1
     Visibility: public -/
 def bstr.bstr_split_utf8
   (s : Slice Std.U8) : Result ((Slice Std.U8) × (Slice Std.U8)) := do
@@ -1699,7 +1699,7 @@ def bstr.bstr_split_utf8
     ok (s1, rest)
 
 /-- [rmpv_misc::bstr::validate_cutoff]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 402:4-413:1 -/
+    Source: 'crates/misc/src/bstr.rs', lines 415:4-426:1 -/
 @[rust_loop_body]
 def bstr.validate_cutoff_loop.body
   (s : Slice Std.U8) (bytes : Std.I32) (n : Std.I32) :
@@ -1729,7 +1729,7 @@ def bstr.validate_cutoff_loop.body
   else ok (done 0#i32)
 
 /-- [rmpv_misc::bstr::validate_cutoff]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 402:4-413:1 -/
+    Source: 'crates/misc/src/bstr.rs', lines 415:4-426:1 -/
 @[rust_loop]
 def bstr.validate_cutoff_loop
   (s : Slice Std.U8) (bytes : Std.I32) (n : Std.I32) : Result Std.I32 := do
@@ -1738,14 +1738,14 @@ def bstr.validate_cutoff_loop
     n
 
 /-- [rmpv_misc::bstr::validate_cutoff]:
-    Source: 'crates/misc/src/bstr.rs', lines 400:0-413:1 -/
+    Source: 'crates/misc/src/bstr.rs', lines 413:0-426:1 -/
 @[reducible]
 def bstr.validate_cutoff
   (s : Slice Std.U8) (bytes : Std.I32) : Result Std.I32 := do
   bstr.validate_cutoff_loop s bytes 1#i32
 
 /-- [rmpv_misc::bstr::bstr_validate_utf8]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 419:4-435:1
+    Source: 'crates/misc/src/bstr.rs', lines 432:4-448:1
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_validate_utf8_loop.body
@@ -1775,7 +1775,7 @@ def bstr.bstr_validate_utf8_loop.body
     else ok (cont next)
 
 /-- [rmpv_misc::bstr::bstr_validate_utf8]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 419:4-435:1
+    Source: 'crates/misc/src/bstr.rs', lines 432:4-448:1
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_validate_utf8_loop (s : Slice Std.U8) : Result Std.I32 := do
@@ -1784,14 +1784,14 @@ def bstr.bstr_validate_utf8_loop (s : Slice Std.U8) : Result Std.I32 := do
     s
 
 /-- [rmpv_misc::bstr::bstr_validate_utf8]:
-    Source: 'crates/misc/src/bstr.rs', lines 417:0-435:1
+    Source: 'crates/misc/src/bstr.rs', lines 430:0-448:1
     Visibility: public -/
 @[reducible]
 def bstr.bstr_validate_utf8 (s : Slice Std.U8) : Result Std.I32 := do
   bstr.bstr_validate_utf8_loop s
 
 /-- [rmpv_misc::bstr::resize_append]:
-    Source: 'crates/misc/src/bstr.rs', lines 469:0-481:1 -/
+    Source: 'crates/misc/src/bstr.rs', lines 482:0-494:1 -/
 def bstr.resize_append
   (s : alloc.vec.Vec Std.U8) (append_min : Std.Usize) :
   Result (alloc.vec.Vec Std.U8)
@@ -1816,7 +1816,7 @@ def bstr.resize_append
   else ok s
 
 /-- [rmpv_misc::bstr::bstr_xappend]:
-    Source: 'crates/misc/src/bstr.rs', lines 485:0-491:1
+    Source: 'crates/misc/src/bstr.rs', lines 498:0-504:1
     Visibility: public -/
 def bstr.bstr_xappend
   (s : alloc.vec.Vec Std.U8) (append : Slice Std.U8) :
@@ -1907,7 +1907,7 @@ def common.mp_append_utf8_bstr
     bstr.bstr_xappend buf s
 
 /-- [rmpv_misc::bstr::bstr_sanitize_utf8_latin1]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 445:4-456:5
+    Source: 'crates/misc/src/bstr.rs', lines 458:4-469:5
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_sanitize_utf8_latin1_loop.body
@@ -1943,7 +1943,7 @@ def bstr.bstr_sanitize_utf8_latin1_loop.body
     else ok (cont (new, replaced, next, first_ok))
 
 /-- [rmpv_misc::bstr::bstr_sanitize_utf8_latin1]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 445:4-456:5
+    Source: 'crates/misc/src/bstr.rs', lines 458:4-469:5
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_sanitize_utf8_latin1_loop
@@ -1958,7 +1958,7 @@ def bstr.bstr_sanitize_utf8_latin1_loop
     (new, replaced, left, first_ok)
 
 /-- [rmpv_misc::bstr::bstr_sanitize_utf8_latin1]:
-    Source: 'crates/misc/src/bstr.rs', lines 440:0-464:1
+    Source: 'crates/misc/src/bstr.rs', lines 453:0-477:1
     Visibility: public -/
 def bstr.bstr_sanitize_utf8_latin1
   (s : Slice Std.U8) : Result (Option (alloc.vec.Vec Std.U8)) := do
@@ -1980,7 +1980,7 @@ def bstr.bstr_sanitize_utf8_latin1
   else ok none
 
 /-- [rmpv_misc::bstr::bstr_xappend0]:
-    Source: 'crates/misc/src/bstr.rs', lines 494:0-496:1
+    Source: 'crates/misc/src/bstr.rs', lines 507:0-509:1
     Visibility: public -/
 def bstr.bstr_xappend0
   (s : alloc.vec.Vec Std.U8) (append : Slice Std.U8) :
@@ -1989,8 +1989,61 @@ def bstr.bstr_xappend0
   let s1 ← bstr.bstr0 append
   bstr.bstr_xappend s s1
 
+/-- [rmpv_misc::cprintf::PrintfError]
+    Source: 'crates/misc/src/cprintf.rs', lines 69:0-79:1
+    Visibility: public -/
+axiom cprintf.PrintfError : Type
+
+/-- [rmpv_misc::cprintf::CArg]
+    Source: 'crates/misc/src/cprintf.rs', lines 34:0-52:1
+    Visibility: public -/
+axiom cprintf.CArg : Type
+
+/-- [rmpv_misc::cprintf::vsnprintf]:
+    Source: 'crates/misc/src/cprintf.rs', lines 312:0-337:1
+    Visibility: public -/
+axiom cprintf.vsnprintf
+  :
+  Slice Std.U8 → Slice cprintf.CArg → Result (core.result.Result
+    (alloc.vec.Vec Std.U8) cprintf.PrintfError)
+
+/-- [rmpv_misc::bstr::bstr_xappend_vasprintf]:
+    Source: 'crates/misc/src/bstr.rs', lines 533:0-549:1
+    Visibility: public -/
+def bstr.bstr_xappend_vasprintf
+  (s : alloc.vec.Vec Std.U8) (fmt : Slice Std.U8) (args : Slice cprintf.CArg) :
+  Result ((core.result.Result Std.I32 cprintf.PrintfError) × (alloc.vec.Vec
+    Std.U8))
+  := do
+  let r ← cprintf.vsnprintf fmt args
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let size := alloc.vec.Vec.len val
+    let i ← size + 1#usize
+    let s1 ← bstr.resize_append s i
+    let s2 := alloc.vec.Vec.deref val
+    let s3 ← alloc.vec.Vec.extend_from_slice core.clone.CloneU8 s1 s2
+    let i1 ← lift (UScalar.hcast .I32 size)
+    ok (core.result.Result.Ok i1, s3)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    let r1 ←
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
+        Std.I32 (core.convert.FromSame cprintf.PrintfError) residual
+    ok (r1, s)
+
+/-- [rmpv_misc::bstr::bstr_xappend_asprintf]:
+    Source: 'crates/misc/src/bstr.rs', lines 517:0-523:1
+    Visibility: public -/
+def bstr.bstr_xappend_asprintf
+  (s : alloc.vec.Vec Std.U8) (fmt : Slice Std.U8) (args : Slice cprintf.CArg) :
+  Result ((core.result.Result Std.I32 cprintf.PrintfError) × (alloc.vec.Vec
+    Std.U8))
+  := do
+  bstr.bstr_xappend_vasprintf s fmt args
+
 /-- [rmpv_misc::bstr::bstr_case_startswith]:
-    Source: 'crates/misc/src/bstr.rs', lines 500:0-503:1
+    Source: 'crates/misc/src/bstr.rs', lines 553:0-556:1
     Visibility: public -/
 def bstr.bstr_case_startswith
   (s : Slice Std.U8) («prefix» : Slice Std.U8) : Result Bool := do
@@ -2005,7 +2058,7 @@ def bstr.bstr_case_startswith
   else ok false
 
 /-- [rmpv_misc::bstr::bstr_case_endswith]:
-    Source: 'crates/misc/src/bstr.rs', lines 508:0-511:1
+    Source: 'crates/misc/src/bstr.rs', lines 561:0-564:1
     Visibility: public -/
 def bstr.bstr_case_endswith
   (s : Slice Std.U8) (suffix : Slice Std.U8) : Result Bool := do
@@ -2021,7 +2074,7 @@ def bstr.bstr_case_endswith
   else ok false
 
 /-- [rmpv_misc::bstr::h_to_i]:
-    Source: 'crates/misc/src/bstr.rs', lines 515:0-527:1
+    Source: 'crates/misc/src/bstr.rs', lines 568:0-580:1
     Visibility: public -/
 def bstr.h_to_i (c : Std.U8) : Result Std.I32 := do
   if c >= 48#u8
@@ -2087,7 +2140,7 @@ def bstr.h_to_i (c : Std.U8) : Result Std.I32 := do
       else ok (-1)#i32
 
 /-- [rmpv_misc::bstr::bstr_decode_hex]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 536:4-549:1
+    Source: 'crates/misc/src/bstr.rs', lines 589:4-602:1
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_decode_hex_loop.body
@@ -2119,7 +2172,7 @@ def bstr.bstr_decode_hex_loop.body
   else ok (done (some arr))
 
 /-- [rmpv_misc::bstr::bstr_decode_hex]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 536:4-549:1
+    Source: 'crates/misc/src/bstr.rs', lines 589:4-602:1
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_decode_hex_loop
@@ -2131,7 +2184,7 @@ def bstr.bstr_decode_hex_loop
     (hex, arr)
 
 /-- [rmpv_misc::bstr::bstr_decode_hex]:
-    Source: 'crates/misc/src/bstr.rs', lines 532:0-549:1
+    Source: 'crates/misc/src/bstr.rs', lines 585:0-602:1
     Visibility: public -/
 def bstr.bstr_decode_hex
   (hex : Slice Std.U8) : Result (Option (alloc.vec.Vec Std.U8)) := do
@@ -2141,7 +2194,7 @@ def bstr.bstr_decode_hex
   bstr.bstr_decode_hex_loop hex arr
 
 /-- [rmpv_misc::bstr::bstrcasecmp0]:
-    Source: 'crates/misc/src/bstr.rs', lines 647:0-649:1
+    Source: 'crates/misc/src/bstr.rs', lines 700:0-702:1
     Visibility: public -/
 def bstr.bstrcasecmp0
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Std.I32 := do
@@ -2149,7 +2202,7 @@ def bstr.bstrcasecmp0
   bstr.bstrcasecmp str1 s
 
 /-- [rmpv_misc::bstr::bstrcmp0]:
-    Source: 'crates/misc/src/bstr.rs', lines 624:0-626:1
+    Source: 'crates/misc/src/bstr.rs', lines 677:0-679:1
     Visibility: public -/
 def bstr.bstrcmp0
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Std.I32 := do
@@ -2157,7 +2210,7 @@ def bstr.bstrcmp0
   bstr.bstrcmp str1 s
 
 /-- [rmpv_misc::bstr::bstr_find_in_list0]: loop body 0:
-    Source: 'crates/misc/src/bstr.rs', lines 555:4-568:1
+    Source: 'crates/misc/src/bstr.rs', lines 608:4-621:1
     Visibility: public -/
 @[rust_loop_body]
 def bstr.bstr_find_in_list0_loop.body
@@ -2190,7 +2243,7 @@ def bstr.bstr_find_in_list0_loop.body
   else ok (done (-1)#i32)
 
 /-- [rmpv_misc::bstr::bstr_find_in_list0]: loop 0:
-    Source: 'crates/misc/src/bstr.rs', lines 555:4-568:1
+    Source: 'crates/misc/src/bstr.rs', lines 608:4-621:1
     Visibility: public -/
 @[rust_loop]
 def bstr.bstr_find_in_list0_loop
@@ -2203,7 +2256,7 @@ def bstr.bstr_find_in_list0_loop
     n
 
 /-- [rmpv_misc::bstr::bstr_find_in_list0]:
-    Source: 'crates/misc/src/bstr.rs', lines 553:0-568:1
+    Source: 'crates/misc/src/bstr.rs', lines 606:0-621:1
     Visibility: public -/
 @[reducible]
 def bstr.bstr_find_in_list0
@@ -2214,7 +2267,7 @@ def bstr.bstr_find_in_list0
   bstr.bstr_find_in_list0_loop s strings case_sensitive 0#i32
 
 /-- [rmpv_misc::bstr::bstr_in_list0]:
-    Source: 'crates/misc/src/bstr.rs', lines 572:0-574:1
+    Source: 'crates/misc/src/bstr.rs', lines 625:0-627:1
     Visibility: public -/
 def bstr.bstr_in_list0
   (s : Slice Std.U8) (strings : Slice (alloc.vec.Vec Std.U8)) :
@@ -2224,7 +2277,7 @@ def bstr.bstr_in_list0
   ok (i != (-1)#i32)
 
 /-- [rmpv_misc::bstr::bstr_startswith0]:
-    Source: 'crates/misc/src/bstr.rs', lines 603:0-605:1
+    Source: 'crates/misc/src/bstr.rs', lines 656:0-658:1
     Visibility: public -/
 def bstr.bstr_startswith0
   (s : Slice Std.U8) («prefix» : Slice Std.U8) : Result Bool := do
@@ -2232,7 +2285,7 @@ def bstr.bstr_startswith0
   bstr.bstr_startswith s s1
 
 /-- [rmpv_misc::bstr::bstr_equals]:
-    Source: 'crates/misc/src/bstr.rs', lines 631:0-637:1
+    Source: 'crates/misc/src/bstr.rs', lines 684:0-690:1
     Visibility: public -/
 def bstr.bstr_equals
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Bool := do
@@ -2244,7 +2297,7 @@ def bstr.bstr_equals
        ok (i2 = 0#i32)
 
 /-- [rmpv_misc::bstr::bstr_equals0]:
-    Source: 'crates/misc/src/bstr.rs', lines 641:0-643:1
+    Source: 'crates/misc/src/bstr.rs', lines 694:0-696:1
     Visibility: public -/
 def bstr.bstr_equals0
   (str1 : Slice Std.U8) (str2 : Slice Std.U8) : Result Bool := do
@@ -2252,7 +2305,7 @@ def bstr.bstr_equals0
   bstr.bstr_equals str1 s
 
 /-- [rmpv_misc::bstr::bstr_find0]:
-    Source: 'crates/misc/src/bstr.rs', lines 653:0-655:1
+    Source: 'crates/misc/src/bstr.rs', lines 706:0-708:1
     Visibility: public -/
 def bstr.bstr_find0
   (haystack : Slice Std.U8) (needle : Slice Std.U8) : Result Std.I32 := do
@@ -2260,7 +2313,7 @@ def bstr.bstr_find0
   bstr.bstr_find haystack s
 
 /-- [rmpv_misc::bstr::bstr_eatstart0]:
-    Source: 'crates/misc/src/bstr.rs', lines 659:0-661:1
+    Source: 'crates/misc/src/bstr.rs', lines 712:0-714:1
     Visibility: public -/
 def bstr.bstr_eatstart0
   (s : Slice Std.U8) («prefix» : Slice Std.U8) :
@@ -2270,7 +2323,7 @@ def bstr.bstr_eatstart0
   bstr.bstr_eatstart s s1
 
 /-- [rmpv_misc::bstr::bstr_eatend0]:
-    Source: 'crates/misc/src/bstr.rs', lines 665:0-667:1
+    Source: 'crates/misc/src/bstr.rs', lines 718:0-720:1
     Visibility: public -/
 def bstr.bstr_eatend0
   (s : Slice Std.U8) («prefix» : Slice Std.U8) :
@@ -2280,74 +2333,74 @@ def bstr.bstr_eatend0
   bstr.bstr_eatend s s1
 
 /-- [rmpv_misc::cfloat::SIGN_BIT]
-    Source: 'crates/misc/src/cfloat.rs', lines 12:0-12:30 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 13:0-13:30 -/
 axiom cfloat.SIGN_BIT : Result Std.U64
 
 /-- [rmpv_misc::cfloat::INF_BITS]
-    Source: 'crates/misc/src/cfloat.rs', lines 13:0-13:44 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 14:0-14:44 -/
 axiom cfloat.INF_BITS : Result Std.U64
 
 /-- [rmpv_misc::cfloat::QNAN_BITS]
-    Source: 'crates/misc/src/cfloat.rs', lines 15:0-15:45 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 16:0-16:45 -/
 axiom cfloat.QNAN_BITS : Result Std.U64
 
 /-- [rmpv_misc::cfloat::MIN_NORMAL_BITS]
-    Source: 'crates/misc/src/cfloat.rs', lines 16:0-16:37 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 17:0-17:37 -/
 axiom cfloat.MIN_NORMAL_BITS : Result Std.U64
 
 /-- [rmpv_misc::cfloat::is_xdigit]:
-    Source: 'crates/misc/src/cfloat.rs', lines 18:0-20:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 19:0-21:1 -/
 axiom cfloat.is_xdigit : Std.U8 → Result Bool
 
 /-- [rmpv_misc::cfloat::is_digit]:
-    Source: 'crates/misc/src/cfloat.rs', lines 22:0-24:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 23:0-25:1 -/
 axiom cfloat.is_digit : Std.U8 → Result Bool
 
 /-- [rmpv_misc::cfloat::starts_with_ci]:
-    Source: 'crates/misc/src/cfloat.rs', lines 26:0-35:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 27:0-36:1 -/
 axiom cfloat.starts_with_ci
   : Slice Std.U8 → Std.Usize → Slice Std.U8 → Result Bool
 
 /-- [rmpv_misc::cfloat::Big]
-    Source: 'crates/misc/src/cfloat.rs', lines 38:0-38:21 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 39:0-39:21 -/
 axiom cfloat.Big : Type
 
 /-- [rmpv_misc::cfloat::cmp_decimal_binary]:
-    Source: 'crates/misc/src/cfloat.rs', lines 88:0-105:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 89:0-106:1 -/
 axiom cfloat.cmp_decimal_binary
   : Slice Std.U8 → Std.I64 → Std.U64 → Std.I64 → Result Ordering
 
 /-- [rmpv_misc::cfloat::round_binary]:
-    Source: 'crates/misc/src/cfloat.rs', lines 111:0-152:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 112:0-153:1 -/
 axiom cfloat.round_binary
   : Std.U64 → Std.I64 → Bool → Result (Std.U64 × Bool)
 
 /-- [rmpv_misc::cfloat::scan_hex_mantissa]:
-    Source: 'crates/misc/src/cfloat.rs', lines 157:0-193:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 158:0-194:1 -/
 axiom cfloat.scan_hex_mantissa
   :
   Slice Std.U8 → Std.Usize → Result (Std.U64 × Std.I64 × Bool ×
     Std.Usize × Std.Usize)
 
 /-- [rmpv_misc::cfloat::scan_exponent]:
-    Source: 'crates/misc/src/cfloat.rs', lines 198:0-223:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 199:0-224:1 -/
 axiom cfloat.scan_exponent
   : Slice Std.U8 → Std.Usize → Std.U8 → Result (Std.I64 × Std.Usize)
 
 /-- [rmpv_misc::cfloat::scan_decimal_mantissa]:
-    Source: 'crates/misc/src/cfloat.rs', lines 227:0-251:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 228:0-252:1 -/
 axiom cfloat.scan_decimal_mantissa
   :
   Slice Std.U8 → Std.Usize → Result ((alloc.vec.Vec Std.U8) × Std.I64 ×
     Std.Usize)
 
 /-- [rmpv_misc::cfloat::round_decimal]:
-    Source: 'crates/misc/src/cfloat.rs', lines 254:0-283:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 255:0-284:1 -/
 axiom cfloat.round_decimal
   : Slice Std.U8 → Std.I64 → Result (Std.U64 × Bool)
 
 /-- [rmpv_misc::cfloat::nan_payload]:
-    Source: 'crates/misc/src/cfloat.rs', lines 288:0-302:1 -/
+    Source: 'crates/misc/src/cfloat.rs', lines 289:0-303:1 -/
 axiom cfloat.nan_payload
   :
   Slice Std.U8 → Std.Usize → Std.Usize → Result ((Option Std.U64) ×
@@ -2362,17 +2415,26 @@ structure clib.Strtod where
   erange : Bool
 
 /-- [rmpv_misc::cfloat::strtod]:
-    Source: 'crates/misc/src/cfloat.rs', lines 307:0-391:1
+    Source: 'crates/misc/src/cfloat.rs', lines 308:0-392:1
     Visibility: public -/
 axiom cfloat.strtod : Slice Std.U8 → Result clib.Strtod
 
+/-- [rmpv_misc::cfloat::round_binary_f32]:
+    Source: 'crates/misc/src/cfloat.rs', lines 396:0-436:1 -/
+axiom cfloat.round_binary_f32 : Std.U64 → Std.I64 → Bool → Result Std.U32
+
+/-- [rmpv_misc::cfloat::strtof]:
+    Source: 'crates/misc/src/cfloat.rs', lines 444:0-492:1
+    Visibility: public -/
+axiom cfloat.strtof : Slice Std.U8 → Result (Std.U32 × Std.Usize)
+
 /-- [rmpv_misc::cfloat::format_f]:
-    Source: 'crates/misc/src/cfloat.rs', lines 395:0-411:1
+    Source: 'crates/misc/src/cfloat.rs', lines 496:0-512:1
     Visibility: public -/
 axiom cfloat.format_f : Std.U64 → Result (alloc.vec.Vec Std.U8)
 
 /-- [rmpv_misc::cfloat::format_d]:
-    Source: 'crates/misc/src/cfloat.rs', lines 415:0-436:1
+    Source: 'crates/misc/src/cfloat.rs', lines 516:0-537:1
     Visibility: public -/
 axiom cfloat.format_d : Std.I64 → Result (alloc.vec.Vec Std.U8)
 
@@ -3933,6 +3995,243 @@ def common.mp_append_escaped_string
     let dst2 ← bstr.bstr_xappend dst1 s
     ok (some rest, dst2)
   else ok (none, dst1)
+
+/-- [rmpv_misc::cprintf::EINVAL]
+    Source: 'crates/misc/src/cprintf.rs', lines 23:0-23:27
+    Visibility: public -/
+axiom cprintf.EINVAL : Result Std.I32
+
+/-- [rmpv_misc::cprintf::EOVERFLOW]
+    Source: 'crates/misc/src/cprintf.rs', lines 26:0-26:30
+    Visibility: public -/
+axiom cprintf.EOVERFLOW : Result Std.I32
+
+/-- [rmpv_misc::cprintf::INT_MAX]
+    Source: 'crates/misc/src/cprintf.rs', lines 28:0-28:37 -/
+axiom cprintf.INT_MAX : Result Std.U64
+
+/-- [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::CArg<'_0>}::clone]:
+    Source: 'crates/misc/src/cprintf.rs', lines 61:4-63:5
+    Visibility: public -/
+axiom cprintf.CArg.Insts.CoreCloneClone.clone
+  : cprintf.CArg → Result cprintf.CArg
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::CArg<'_0>}]
+    Source: 'crates/misc/src/cprintf.rs', lines 60:0-64:1 -/
+@[reducible]
+def cprintf.CArg.Insts.CoreCloneClone : core.clone.Clone cprintf.CArg := {
+  clone := cprintf.CArg.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::marker::Copy for rmpv_misc::cprintf::CArg<'a>}]
+    Source: 'crates/misc/src/cprintf.rs', lines 32:9-32:13 -/
+@[reducible]
+def cprintf.CArg.Insts.CoreMarkerCopy : core.marker.Copy cprintf.CArg := {
+  cloneInst := cprintf.CArg.Insts.CoreCloneClone
+}
+
+/-- [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::PrintfError}::clone]:
+    Source: 'crates/misc/src/cprintf.rs', lines 86:4-88:5
+    Visibility: public -/
+axiom cprintf.PrintfError.Insts.CoreCloneClone.clone
+  : cprintf.PrintfError → Result cprintf.PrintfError
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::PrintfError}]
+    Source: 'crates/misc/src/cprintf.rs', lines 85:0-89:1 -/
+@[reducible]
+def cprintf.PrintfError.Insts.CoreCloneClone : core.clone.Clone
+  cprintf.PrintfError := {
+  clone := cprintf.PrintfError.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::marker::Copy for rmpv_misc::cprintf::PrintfError}]
+    Source: 'crates/misc/src/cprintf.rs', lines 67:9-67:13 -/
+@[reducible]
+def cprintf.PrintfError.Insts.CoreMarkerCopy : core.marker.Copy
+  cprintf.PrintfError := {
+  cloneInst := cprintf.PrintfError.Insts.CoreCloneClone
+}
+
+/-- [rmpv_misc::cprintf::Out]
+    Source: 'crates/misc/src/cprintf.rs', lines 93:0-96:1 -/
+axiom cprintf.Out : Type
+
+/-- [rmpv_misc::cprintf::Run]
+    Source: 'crates/misc/src/cprintf.rs', lines 98:0-101:1 -/
+axiom cprintf.Run : Type
+
+/-- [rmpv_misc::cprintf::Spec]
+    Source: 'crates/misc/src/cprintf.rs', lines 150:0-160:1 -/
+axiom cprintf.Spec : Type
+
+/-- [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::Spec}::clone]:
+    Source: 'crates/misc/src/cprintf.rs', lines 186:4-188:5
+    Visibility: public -/
+axiom cprintf.Spec.Insts.CoreCloneClone.clone
+  : cprintf.Spec → Result cprintf.Spec
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::Spec}]
+    Source: 'crates/misc/src/cprintf.rs', lines 185:0-189:1 -/
+@[reducible]
+def cprintf.Spec.Insts.CoreCloneClone : core.clone.Clone cprintf.Spec := {
+  clone := cprintf.Spec.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::marker::Copy for rmpv_misc::cprintf::Spec}]
+    Source: 'crates/misc/src/cprintf.rs', lines 149:9-149:13 -/
+@[reducible]
+def cprintf.Spec.Insts.CoreMarkerCopy : core.marker.Copy cprintf.Spec := {
+  cloneInst := cprintf.Spec.Insts.CoreCloneClone
+}
+
+/-- [rmpv_misc::cprintf::Length]
+    Source: 'crates/misc/src/cprintf.rs', lines 168:0-173:1 -/
+axiom cprintf.Length : Type
+
+/-- [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::Length}::clone]:
+    Source: 'crates/misc/src/cprintf.rs', lines 196:4-198:5
+    Visibility: public -/
+axiom cprintf.Length.Insts.CoreCloneClone.clone
+  : cprintf.Length → Result cprintf.Length
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::clone::Clone for rmpv_misc::cprintf::Length}]
+    Source: 'crates/misc/src/cprintf.rs', lines 195:0-199:1 -/
+@[reducible]
+def cprintf.Length.Insts.CoreCloneClone : core.clone.Clone cprintf.Length := {
+  clone := cprintf.Length.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [rmpv_misc::cprintf::{impl core::marker::Copy for rmpv_misc::cprintf::Length}]
+    Source: 'crates/misc/src/cprintf.rs', lines 167:9-167:13 -/
+@[reducible]
+def cprintf.Length.Insts.CoreMarkerCopy : core.marker.Copy cprintf.Length := {
+  cloneInst := cprintf.Length.Insts.CoreCloneClone
+}
+
+/-- [rmpv_misc::cprintf::sub]:
+    Source: 'crates/misc/src/cprintf.rs', lines 177:0-179:1 -/
+axiom cprintf.sub : Std.I32 → Std.I64 → Result Std.I32
+
+/-- [rmpv_misc::cprintf::read_int]:
+    Source: 'crates/misc/src/cprintf.rs', lines 203:0-214:1 -/
+axiom cprintf.read_int
+  : Slice Std.U8 → Std.Usize → Result ((Option Std.I64) × Std.Usize)
+
+/-- [rmpv_misc::cprintf::at]:
+    Source: 'crates/misc/src/cprintf.rs', lines 216:0-218:1 -/
+axiom cprintf.at : Slice Std.U8 → Std.Usize → Result Std.U8
+
+/-- [rmpv_misc::cprintf::is_digit]:
+    Source: 'crates/misc/src/cprintf.rs', lines 220:0-222:1 -/
+axiom cprintf.is_digit : Std.U8 → Result Bool
+
+/-- [rmpv_misc::cprintf::Args]
+    Source: 'crates/misc/src/cprintf.rs', lines 224:0-227:1 -/
+axiom cprintf.Args : Type
+
+/-- [rmpv_misc::cprintf::parse_spec]:
+    Source: 'crates/misc/src/cprintf.rs', lines 342:0-434:1 -/
+axiom cprintf.parse_spec
+  :
+  Slice Std.U8 → Std.Usize → Std.Usize → cprintf.Args → Result
+    ((core.result.Result cprintf.Spec cprintf.PrintfError) × Std.Usize ×
+    cprintf.Args)
+
+/-- [rmpv_misc::cprintf::parse_length]:
+    Source: 'crates/misc/src/cprintf.rs', lines 439:0-479:1 -/
+axiom cprintf.parse_length
+  :
+  Slice Std.U8 → Std.Usize → Std.Usize → Result ((core.result.Result
+    (cprintf.Length × Std.U8) cprintf.PrintfError) × Std.Usize)
+
+/-- [rmpv_misc::cprintf::conversion]:
+    Source: 'crates/misc/src/cprintf.rs', lines 483:0-584:1 -/
+axiom cprintf.conversion
+  :
+  Slice Std.U8 → Std.Usize → Std.Usize → cprintf.Args → cprintf.Out →
+    Result ((core.result.Result Unit cprintf.PrintfError) × Std.Usize ×
+    cprintf.Args × cprintf.Out)
+
+/-- [rmpv_misc::cprintf::itoa]:
+    Source: 'crates/misc/src/cprintf.rs', lines 587:0-603:1 -/
+axiom cprintf.itoa
+  : Std.U64 → Std.U64 → Bool → Result (alloc.vec.Vec Std.U8)
+
+/-- [rmpv_misc::cprintf::integer]:
+    Source: 'crates/misc/src/cprintf.rs', lines 607:0-687:1 -/
+axiom cprintf.integer
+  :
+  cprintf.Out → cprintf.Spec → Std.U64 → Bool → Std.U64 → Result
+    cprintf.Out
+
+/-- [rmpv_misc::cprintf::string]:
+    Source: 'crates/misc/src/cprintf.rs', lines 690:0-715:1 -/
+axiom cprintf.string
+  :
+  cprintf.Out → cprintf.Spec → Option (Slice Std.U8) → Result cprintf.Out
+
+/-- [rmpv_misc::cprintf::SIGN_BIT]
+    Source: 'crates/misc/src/cprintf.rs', lines 717:0-717:30 -/
+axiom cprintf.SIGN_BIT : Result Std.U64
+
+/-- [rmpv_misc::cprintf::EXP_MASK]
+    Source: 'crates/misc/src/cprintf.rs', lines 718:0-718:44 -/
+axiom cprintf.EXP_MASK : Result Std.U64
+
+/-- [rmpv_misc::cprintf::MANT_MASK]
+    Source: 'crates/misc/src/cprintf.rs', lines 719:0-719:37 -/
+axiom cprintf.MANT_MASK : Result Std.U64
+
+/-- [rmpv_misc::cprintf::MAX_FRAC_DIGITS]
+    Source: 'crates/misc/src/cprintf.rs', lines 723:0-723:34 -/
+axiom cprintf.MAX_FRAC_DIGITS : Result Std.I64
+
+/-- [rmpv_misc::cprintf::MAX_SIG_DIGITS]
+    Source: 'crates/misc/src/cprintf.rs', lines 725:0-725:32 -/
+axiom cprintf.MAX_SIG_DIGITS : Result Std.I64
+
+/-- [rmpv_misc::cprintf::special]:
+    Source: 'crates/misc/src/cprintf.rs', lines 729:0-749:1 -/
+axiom cprintf.special
+  :
+  cprintf.Out → cprintf.Spec → Bool → Array Std.U8 3#usize → Result
+    cprintf.Out
+
+/-- [rmpv_misc::cprintf::special_word]:
+    Source: 'crates/misc/src/cprintf.rs', lines 751:0-761:1 -/
+axiom cprintf.special_word
+  : cprintf.Spec → Std.U64 → Result (Option (Array Std.U8 3#usize))
+
+/-- [rmpv_misc::cprintf::fixed_digits]:
+    Source: 'crates/misc/src/cprintf.rs', lines 767:0-772:1 -/
+axiom cprintf.fixed_digits
+  : Std.U64 → Std.I64 → Result ((alloc.vec.Vec Std.U8) × Std.I64)
+
+/-- [rmpv_misc::cprintf::exp_digits]:
+    Source: 'crates/misc/src/cprintf.rs', lines 777:0-785:1 -/
+axiom cprintf.exp_digits
+  :
+  Std.U64 → Std.I64 → Result ((alloc.vec.Vec Std.U8) × Std.I64 × Std.I64)
+
+/-- [rmpv_misc::cprintf::exponent_text]:
+    Source: 'crates/misc/src/cprintf.rs', lines 788:0-796:1 -/
+axiom cprintf.exponent_text
+  : Std.U8 → Std.I64 → Result (alloc.vec.Vec Std.U8)
+
+/-- [rmpv_misc::cprintf::float]:
+    Source: 'crates/misc/src/cprintf.rs', lines 799:0-901:1 -/
+axiom cprintf.float
+  : cprintf.Out → cprintf.Spec → Std.U64 → Result cprintf.Out
+
+/-- [rmpv_misc::cprintf::hex_increment]:
+    Source: 'crates/misc/src/cprintf.rs', lines 905:0-921:1 -/
+axiom cprintf.hex_increment
+  : Slice Std.U8 → Std.U8 → Result (Bool × (Slice Std.U8))
+
+/-- [rmpv_misc::cprintf::float_hex]:
+    Source: 'crates/misc/src/cprintf.rs', lines 924:0-1023:1 -/
+axiom cprintf.float_hex
+  : cprintf.Out → cprintf.Spec → Std.U64 → Result cprintf.Out
 
 /-- [rmpv_misc::ctype::mp_isprint]:
     Source: 'crates/misc/src/ctype.rs', lines 8:0-10:1
@@ -8498,6 +8797,34 @@ axiom os.realpath : Slice Std.U8 → Result (Option (alloc.vec.Vec Std.U8))
     Source: 'crates/misc/src/os.rs', lines 66:0-70:1
     Visibility: public -/
 axiom os.mkdir : Slice Std.U8 → Result Unit
+
+/-- [rmpv_misc::os::O_NONBLOCK]
+    Source: 'crates/misc/src/os.rs', lines 141:0-141:31 -/
+axiom os.O_NONBLOCK : Result Std.I32
+
+/-- [rmpv_misc::os::WakeupPipe]
+    Source: 'crates/misc/src/os.rs', lines 152:0-155:1
+    Visibility: public -/
+axiom os.WakeupPipe : Type
+
+/-- [rmpv_misc::os::{impl core::fmt::Debug for rmpv_misc::os::WakeupPipe}::fmt]:
+    Source: 'crates/misc/src/os.rs', lines 151:9-151:14
+    Visibility: public -/
+axiom os.WakeupPipe.Insts.CoreFmtDebug.fmt
+  :
+  os.WakeupPipe → core.fmt.Formatter → Result ((core.result.Result Unit
+    core.fmt.Error) × core.fmt.Formatter)
+
+/-- Trait implementation: [rmpv_misc::os::{impl core::fmt::Debug for rmpv_misc::os::WakeupPipe}]
+    Source: 'crates/misc/src/os.rs', lines 151:9-151:14 -/
+@[reducible]
+def os.WakeupPipe.Insts.CoreFmtDebug : core.fmt.Debug os.WakeupPipe := {
+  fmt := os.WakeupPipe.Insts.CoreFmtDebug.fmt
+}
+
+/-- [rmpv_misc::os::reopen_nonblocking]:
+    Source: 'crates/misc/src/os.rs', lines 158:0-165:1 -/
+axiom os.reopen_nonblocking : Std.I32 → Bool → Result (Option std.fs.File)
 
 /-- [rmpv_misc::path_utils::DOT]
     Source: 'crates/misc/src/path_utils.rs', lines 12:0-12:29 -/
