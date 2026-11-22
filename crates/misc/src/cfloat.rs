@@ -1,5 +1,6 @@
 //! Stand-ins for the C library routines that Aeneas is not asked to
-//! translate: `strtod`, and the two `printf` conversions `misc/` uses.
+//! translate: `strtod`, `strtof`, and the two `printf` conversions `misc/`
+//! uses.
 //!
 //! Their signatures have no floating point: a `double` crosses as its bit
 //! pattern. Charon is told to keep this module opaque, so in Lean these are
@@ -388,6 +389,106 @@ pub fn strtod(s: &[u8]) -> Strtod {
         consumed: end,
         erange,
     }
+}
+
+/// Rounds `m * 2^e2`, plus a little more if `sticky`, to the nearest
+/// `float`, ties to even, and returns its bits without sign.
+fn round_binary_f32(m: u64, e2: i64, sticky: bool) -> u32 {
+    if m == 0 {
+        return 0;
+    }
+    let lz = m.leading_zeros();
+    let m = m << lz;
+    let top = e2.saturating_sub(lz as i64).saturating_add(63);
+    if top > 127 {
+        return 0x7f80_0000;
+    }
+    // Bits of `m` the result keeps: 24 for a normal number, fewer below
+    // 2^-126, none at all below 2^-150.
+    let keep: i64 = if top >= -126 { 24 } else { 24 - (-126 - top) };
+    if keep < 0 {
+        return 0;
+    }
+    let shift = 64 - keep;
+    let (mant, rem, half) = if shift == 64 {
+        (0, m, 1 << 63)
+    } else {
+        (m >> shift, m & ((1 << shift) - 1), 1 << (shift - 1))
+    };
+    let mut mant = mant;
+    if rem > half || (rem == half && (sticky || mant & 1 == 1)) {
+        mant += 1;
+    }
+    if top < -126 {
+        // Subnormal; a carry into bit 23 gives the smallest normal number,
+        // whose bits are the same.
+        return mant as u32;
+    }
+    let mut top = top;
+    if mant == 1 << 24 {
+        mant >>= 1;
+        top += 1;
+        if top > 127 {
+            return 0x7f80_0000;
+        }
+    }
+    (((top + 127) as u32) << 23) | (mant as u32 & 0x007f_ffff)
+}
+
+/// `strtof` as glibc behaves on the C string `s` in the "C" locale with the
+/// default rounding mode.
+///
+/// Returns the bits of the `float` and how many bytes the number took.
+/// `errno` is not modelled: `scanf`, the one user, ignores it.
+#[must_use]
+pub fn strtof(s: &[u8]) -> (u32, usize) {
+    let d = strtod(s);
+    let sign = ((d.bits >> 32) as u32) & 0x8000_0000;
+    let magnitude = d.bits & !SIGN_BIT;
+    if d.consumed == 0 {
+        return (0, 0);
+    }
+    if magnitude >= INF_BITS {
+        // inf, or nan with its payload in the float's mantissa.
+        let nan = if magnitude > INF_BITS {
+            0x7fc0_0000 | ((magnitude & ((1 << 51) - 1)) as u32 & 0x003f_ffff)
+        } else {
+            0x7f80_0000
+        };
+        return (sign | nan, d.consumed);
+    }
+    let mut i = 0;
+    while isspace(cstr_at(s, i)) {
+        i += 1;
+    }
+    if cstr_at(s, i) == b'-' || cstr_at(s, i) == b'+' {
+        i += 1;
+    }
+    if cstr_at(s, i) == b'0' && tolower(cstr_at(s, i + 1)) == b'x' {
+        let (m, e2, sticky, end, digits) = scan_hex_mantissa(s, i + 2);
+        if digits == 0 {
+            return (sign, d.consumed);
+        }
+        let (exp, _) = scan_exponent(s, end, b'p');
+        return (
+            sign | round_binary_f32(m, e2.saturating_add(exp), sticky),
+            d.consumed,
+        );
+    }
+    let (digits, e10, end) = scan_decimal_mantissa(s, i);
+    let (exp, _) = scan_exponent(s, end, b'e');
+    if digits.is_empty() {
+        return (sign, d.consumed);
+    }
+    let mut text = String::with_capacity(digits.len() + 24);
+    for &c in &digits {
+        text.push(char::from(c));
+    }
+    text.push('e');
+    text.push_str(&e10.saturating_add(exp).to_string());
+    // Rust's parser rounds correctly, as glibc does.
+    let bits = text.parse::<f32>().map_or(0, f32::to_bits);
+    (sign | bits, d.consumed)
 }
 
 /// What `printf("%f")` writes for the `double` with these bits.

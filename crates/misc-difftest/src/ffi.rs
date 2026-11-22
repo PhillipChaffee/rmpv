@@ -63,6 +63,7 @@ unsafe extern "C" {
     ) -> c_int;
     pub fn dt_sscanf(s: *const c_char, fmt: *const c_char, ptrs: *const *mut c_void) -> c_int;
     pub fn dt_bstr_sscanf(s: Bstr, fmt: *const c_char, ptrs: *const *mut c_void) -> c_int;
+    pub fn strtof(s: *const c_char, end: *mut *mut c_char) -> f32;
     pub fn ta_free(p: *mut c_void);
 
     // misc/bstr.c

@@ -13,6 +13,7 @@
 pub mod clib;
 pub mod common;
 pub mod cprintf;
+pub mod cscanf;
 pub mod ctype;
 
 pub mod bstr;

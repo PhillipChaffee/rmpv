@@ -9,6 +9,7 @@ use crate::cfloat::strtod;
 use crate::clib::{cstr, memchr, memcmp, memrchr, strchr, strncasecmp, strndup, strtoll};
 use crate::common::{mp_append_utf8_bstr, mp_log2};
 use crate::cprintf::{self, CArg, PrintfError};
+use crate::cscanf::{self, ScanArg, ScanfError};
 use crate::ctype::{mp_isspace, mp_tolower};
 
 pub const BSTR_DECODE_OUT_OF_RANGE: i32 = -1;
@@ -312,6 +313,17 @@ pub fn bstr_lower(s: &mut [u8]) {
         s[i as usize] = mp_tolower(s[i as usize]);
         i += 1;
     }
+}
+
+/// `bstr_sscanf`: `sscanf` on a NUL-terminated copy of `s`, so the input
+/// ends at the first NUL byte of `s`. The pointer arguments are `args`.
+///
+/// # Errors
+///
+/// The port's refusals of what it does not model; see
+/// [`cscanf`](crate::cscanf).
+pub fn bstr_sscanf(s: &[u8], fmt: &[u8], args: &mut [ScanArg<'_>]) -> Result<i32, ScanfError> {
+    cscanf::vsscanf(s, fmt, args)
 }
 
 /// `bstr_parse_utf8_code_length`.
