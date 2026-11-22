@@ -1,4 +1,4 @@
-.PHONY: setup fmt lint test mpv mpv-build proofs cover difftest ci
+.PHONY: setup fmt lint test mpv mpv-build proofs cover difftest loom ci
 
 MPV := formal/.mpv
 # Only the top-level keys; later tables such as [libplacebo] have their own.
@@ -51,7 +51,15 @@ cover: mpv-build
 # Run the Rust port of mpv's misc/ folder and mpv's compiled C on the same
 # generated inputs. `make test` runs these too when the mpv build exists; this
 # target builds it first and fails without it.
+# `timeout` makes a hung run fail; the threaded tests also stop themselves.
 difftest: mpv-build
-	RMPV_REQUIRE_MPV_BUILD=1 cargo test --release --locked -p rmpv-misc-difftest -- --show-output
+	RMPV_REQUIRE_MPV_BUILD=1 timeout 3600 cargo test --release --locked -p rmpv-misc-difftest -- --show-output
 
-ci: lint test proofs difftest
+# Run the threaded ports of misc/ under loom, which explores their thread
+# schedules (crates/misc/tests/loom.rs). Its own target directory keeps the
+# --cfg loom build from replacing the normal one.
+loom:
+	RUSTFLAGS="--cfg loom" CARGO_TARGET_DIR=target/loom timeout 1800 \
+		cargo test --release --locked -p rmpv-misc --test loom -- --show-output
+
+ci: lint test proofs difftest loom

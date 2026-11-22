@@ -1,8 +1,10 @@
 //! Port of the `mp_waiter` part of `misc/thread_tools.c`.
 //!
-//! `mp_cancel` is not ported; `docs/pilot-misc-rust.md` says why.
+//! `mp_cancel` is not ported yet.
 
-use std::sync::{Condvar, Mutex, PoisonError};
+use std::sync::PoisonError;
+
+use crate::threads::{Condvar, Mutex};
 
 /// `struct mp_waiter`: a one-shot semaphore that carries a value.
 /// `MpWaiter::new()` is `MP_WAITER_INITIALIZER`.

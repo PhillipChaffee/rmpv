@@ -11,6 +11,12 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+# loom replaces Mutex, Condvar, atomics and threads when the crate is built
+# with `--cfg loom`, for the schedule exploration in tests/loom.rs (`make
+# loom`). Normal builds do not compile it.
+[target.'cfg(loom)'.dependencies]
+loom = "0.7.3"
+
 # The workspace lint table, with the relaxations the port needs. A crate cannot
 # inherit the workspace table and override part of it, so the table is repeated.
 # README.md gives the reason for each relaxation.
@@ -22,7 +28,7 @@ missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 # `--cfg aeneas` is set when Charon reads the crate; see src/lib.rs.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aeneas)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aeneas)', 'cfg(loom)'] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

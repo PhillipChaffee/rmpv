@@ -35,6 +35,15 @@ impl Bstr {
     }
 }
 
+/// `struct pollfd`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PollFd {
+    pub fd: c_int,
+    pub events: i16,
+    pub revents: i16,
+}
+
 /// `mp_rand_state`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +290,84 @@ unsafe extern "C" {
     pub fn mp_waiter_wakeup(waiter: *mut c_void, value: usize);
     pub fn mp_waiter_poll(waiter: *mut c_void) -> bool;
     pub fn mp_rendezvous(tag: *mut c_void, value: isize) -> isize;
+
+    // misc/thread_tools.c: mp_cancel
+    pub fn mp_cancel_new(talloc_ctx: *mut c_void) -> *mut c_void;
+    pub fn mp_cancel_trigger(c: *mut c_void);
+    pub fn mp_cancel_reset(c: *mut c_void);
+    pub fn mp_cancel_test(c: *mut c_void) -> bool;
+    pub fn mp_cancel_wait(c: *mut c_void, timeout: c_double) -> bool;
+    pub fn mp_cancel_set_cb(
+        c: *mut c_void,
+        cb: Option<extern "C" fn(*mut c_void)>,
+        ctx: *mut c_void,
+    );
+    pub fn mp_cancel_set_parent(slave: *mut c_void, parent: *mut c_void);
+    pub fn mp_cancel_get_fd(c: *mut c_void) -> c_int;
+
+    // misc/dispatch.c, and the talloc'd data mp_dispatch_enqueue_autofree
+    // needs (shim/thread_shim.c)
+    pub fn mp_dispatch_create(talloc_parent: *mut c_void) -> *mut c_void;
+    pub fn mp_dispatch_set_wakeup_fn(
+        q: *mut c_void,
+        f: Option<extern "C" fn(*mut c_void)>,
+        ctx: *mut c_void,
+    );
+    pub fn mp_dispatch_set_onlock_fn(
+        q: *mut c_void,
+        f: Option<extern "C" fn(*mut c_void)>,
+        ctx: *mut c_void,
+    );
+    pub fn mp_dispatch_enqueue(q: *mut c_void, f: extern "C" fn(*mut c_void), data: *mut c_void);
+    pub fn mp_dispatch_enqueue_autofree(
+        q: *mut c_void,
+        f: extern "C" fn(*mut c_void),
+        data: *mut c_void,
+    );
+    pub fn mp_dispatch_enqueue_notify(
+        q: *mut c_void,
+        f: extern "C" fn(*mut c_void),
+        data: *mut c_void,
+    );
+    pub fn mp_dispatch_cancel_fn(q: *mut c_void, f: extern "C" fn(*mut c_void), data: *mut c_void);
+    pub fn mp_dispatch_run(q: *mut c_void, f: extern "C" fn(*mut c_void), data: *mut c_void);
+    pub fn mp_dispatch_queue_process(q: *mut c_void, timeout: c_double);
+    pub fn mp_dispatch_interrupt(q: *mut c_void);
+    pub fn mp_dispatch_adjust_timeout(q: *mut c_void, until: i64);
+    pub fn mp_dispatch_lock(q: *mut c_void);
+    pub fn mp_dispatch_unlock(q: *mut c_void);
+    pub fn dt_autofree_new(
+        ctx: *mut c_void,
+        id: usize,
+        on_free: extern "C" fn(*mut c_void, usize),
+    ) -> *mut c_void;
+
+    // misc/thread_pool.c
+    pub fn mp_thread_pool_create(
+        ta_parent: *mut c_void,
+        init_threads: c_int,
+        min_threads: c_int,
+        max_threads: c_int,
+    ) -> *mut c_void;
+    pub fn mp_thread_pool_queue(
+        pool: *mut c_void,
+        f: extern "C" fn(*mut c_void),
+        ctx: *mut c_void,
+    ) -> bool;
+    pub fn mp_thread_pool_run(
+        pool: *mut c_void,
+        f: extern "C" fn(*mut c_void),
+        ctx: *mut c_void,
+    ) -> bool;
+
+    // osdep/timer.c
+    pub fn mp_time_init();
+    pub fn mp_time_ns() -> i64;
+    pub fn mp_time_ns_add(time_ns: i64, timeout_sec: c_double) -> i64;
+
+    // The C library, to look at a wakeup pipe.
+    pub fn ioctl(fd: c_int, request: std::ffi::c_ulong, ...) -> c_int;
+    pub fn poll(fds: *mut PollFd, nfds: std::ffi::c_ulong, timeout: c_int) -> c_int;
 
     // misc/charset_conv.c
     pub fn mp_charset_is_utf8(user_cp: *const c_char) -> bool;

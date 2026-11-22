@@ -117,3 +117,66 @@ pub fn same_view(c: View, r: View) -> bool {
 pub fn sign(v: i32) -> i32 {
     v.signum()
 }
+
+/// How many bytes are waiting to be read from `fd` (`FIONREAD`).
+///
+/// # Panics
+///
+/// If `ioctl` fails.
+#[must_use]
+pub fn fd_pending(fd: std::ffi::c_int) -> i32 {
+    const FIONREAD: std::ffi::c_ulong = 0x541b;
+    let mut n: std::ffi::c_int = 0;
+    let r = c!(ioctl(fd, FIONREAD, &raw mut n));
+    assert_eq!(r, 0, "ioctl(FIONREAD) on {fd}");
+    n
+}
+
+/// Whether `poll` reports `fd` readable now.
+#[must_use]
+pub fn fd_readable(fd: std::ffi::c_int) -> bool {
+    const POLLIN: i16 = 1;
+    let mut p = ffi::PollFd {
+        fd,
+        events: POLLIN,
+        revents: 0,
+    };
+    let r = c!(poll(&raw mut p, 1, 0));
+    r == 1 && p.revents & POLLIN != 0
+}
+
+/// Runs `f` on its own thread and fails the calling test if it has not
+/// finished after `seconds`.
+///
+/// A hung test then fails instead of blocking the run. The hung thread is
+/// left behind; the test binary exits when the test harness does.
+///
+/// # Panics
+///
+/// On the timeout, and with `f`'s panic if it panics.
+pub fn with_timeout<T: Send + 'static>(
+    name: &str,
+    seconds: u64,
+    f: impl FnOnce() -> T + Send + 'static,
+) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let worker = std::thread::Builder::new()
+        .name(name.to_owned())
+        .spawn(move || {
+            let _ = tx.send(std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)));
+        })
+        .expect("spawn the test thread");
+    match rx.recv_timeout(std::time::Duration::from_secs(seconds)) {
+        Ok(Ok(v)) => {
+            worker.join().expect("test thread");
+            v
+        }
+        Ok(Err(panic)) => std::panic::resume_unwind(panic),
+        Err(
+            std::sync::mpsc::RecvTimeoutError::Timeout
+            | std::sync::mpsc::RecvTimeoutError::Disconnected,
+        ) => {
+            panic!("{name}: no result after {seconds} s, the test hangs")
+        }
+    }
+}

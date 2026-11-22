@@ -26,6 +26,7 @@ have no C file in `misc/`:
 | `cfloat` | Stand-ins for the C library that Aeneas is told to keep opaque: `strtod`, `strtof`, `printf("%f")` and `printf("%" PRId64)`. Their signatures carry a `double` as its bit pattern. |
 | `cprintf` | `vsnprintf` as glibc formats in the "C" locale, for `bstr_xappend_asprintf`: a C argument list is a slice of `CArg`, and the format is interpreted as glibc does. What it does not model (`%n`, wide strings, `long double`, positional arguments) it refuses with an error. |
 | `cscanf` | `vsscanf` as glibc's C23 entry point reads in the "C" locale, for `bstr_sscanf`: each pointer argument is a `ScanArg`. It refuses what it does not model (positional arguments, `%m`, wide strings, `long double`, `%p`). |
+| `threads` | What the threaded files use from `osdep/`: `mp_time_ns`, `mp_time_ns_add` and the timed condition wait, and the mutex, condition variable, atomic and thread types, which are loom's under `--cfg loom` (`make loom`). Charon leaves it out. |
 | `os` | The system calls: `stat`, `getcwd`, `realpath`, `mkdir`, `open`, `rename` and the source of random bytes. Opaque to Aeneas as well. |
 
 A function in `cfloat` or `os` is a declaration without a body in the Lean

@@ -8,6 +8,7 @@
 
 mod bstr;
 mod clib;
+mod dispatch;
 mod fs;
 mod printf;
 mod scanf;
