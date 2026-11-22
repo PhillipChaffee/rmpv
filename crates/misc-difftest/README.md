@@ -28,6 +28,11 @@ the build script prints a warning and the crate compiles without them.
   `shim/inline_shim.c`, which also holds wrappers for the functions that take
   or return `mpv_node` trees. Trees cross the boundary as bytes
   (`shim/dt_node.h`, `src/node_wire.rs`).
+- `shim/variadic_shim.c` calls `snprintf`, `sscanf` and mpv's variadic
+  `bstr_xappend_asprintf` and `bstr_sscanf` with an argument list chosen at
+  run time. It passes 24 integer slots and 8 doubles every time and lets the
+  format pick, which the x86-64 calling convention makes exact; its comment
+  says why.
 - `shim/interpose.c` replaces libavutil's `av_random_bytes`, so that a test
   can fix the state `mp_rand_seed(0)` returns.
 

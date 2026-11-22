@@ -1,6 +1,6 @@
 //! mpv's C functions and the entry points of the C shims.
 
-use std::ffi::{c_char, c_double, c_int, c_longlong, c_uint, c_void};
+use std::ffi::{c_char, c_double, c_int, c_long, c_longlong, c_uint, c_void};
 
 /// `struct bstr`.
 #[repr(C)]
@@ -44,6 +44,25 @@ pub struct MpRandState {
 
 unsafe extern "C" {
     pub fn free(p: *mut c_void);
+
+    // shim/variadic_shim.c: `ints` holds 24 integer-class arguments and
+    // `dbls` 8 doubles; `ptrs` holds 24 pointers.
+    pub fn dt_snprintf(
+        buf: *mut c_char,
+        size: usize,
+        fmt: *const c_char,
+        ints: *const c_long,
+        dbls: *const c_double,
+        err: *mut c_int,
+    ) -> c_int;
+    pub fn dt_bstr_xappend_asprintf(
+        s: *mut Bstr,
+        fmt: *const c_char,
+        ints: *const c_long,
+        dbls: *const c_double,
+    ) -> c_int;
+    pub fn dt_sscanf(s: *const c_char, fmt: *const c_char, ptrs: *const *mut c_void) -> c_int;
+    pub fn dt_bstr_sscanf(s: Bstr, fmt: *const c_char, ptrs: *const *mut c_void) -> c_int;
     pub fn ta_free(p: *mut c_void);
 
     // misc/bstr.c

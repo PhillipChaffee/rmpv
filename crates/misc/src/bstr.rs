@@ -8,6 +8,7 @@
 use crate::cfloat::strtod;
 use crate::clib::{cstr, memchr, memcmp, memrchr, strchr, strncasecmp, strndup, strtoll};
 use crate::common::{mp_append_utf8_bstr, mp_log2};
+use crate::cprintf::{self, CArg, PrintfError};
 use crate::ctype::{mp_isspace, mp_tolower};
 
 pub const BSTR_DECODE_OUT_OF_RANGE: i32 = -1;
@@ -493,6 +494,45 @@ pub fn bstr_xappend(s: &mut Vec<u8>, append: &[u8]) {
 /// `bstr_xappend0`.
 pub fn bstr_xappend0(s: &mut Vec<u8>, append: &[u8]) {
     bstr_xappend(s, bstr0(append));
+}
+
+/// `bstr_xappend_asprintf`: appends what `printf(fmt, args...)` writes and
+/// returns its length. The variadic arguments are `args`.
+///
+/// # Errors
+///
+/// As [`bstr_xappend_vasprintf`].
+pub fn bstr_xappend_asprintf(
+    s: &mut Vec<u8>,
+    fmt: &[u8],
+    args: &[CArg<'_>],
+) -> Result<i32, PrintfError> {
+    bstr_xappend_vasprintf(s, fmt, args)
+}
+
+/// `bstr_xappend_vasprintf`. On a formatting error the C returns the
+/// negative result of `vsnprintf` and leaves the length of `s` as it was;
+/// the port returns the error and leaves `s` as it was.
+///
+/// # Errors
+///
+/// [`PrintfError::Failed`] where the C returns -1, and the port's
+/// refusals of what it does not model; see [`cprintf`](crate::cprintf).
+pub fn bstr_xappend_vasprintf(
+    s: &mut Vec<u8>,
+    fmt: &[u8],
+    args: &[CArg<'_>],
+) -> Result<i32, PrintfError> {
+    // The C formats into the free space first and again after growing the
+    // buffer if it did not fit; both produce the same bytes.
+    let text = cprintf::vsnprintf(fmt, args)?;
+    let size = text.len();
+    let avail = s.capacity() - s.len();
+    if avail < 1 || size + 1 > avail {
+        resize_append(s, size + 1);
+    }
+    s.extend_from_slice(&text);
+    Ok(size as i32)
 }
 
 /// `bstr_case_startswith`.

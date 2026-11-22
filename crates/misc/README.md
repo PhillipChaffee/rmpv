@@ -15,7 +15,7 @@ status of every function.
 ## Layout
 
 One module per C file with the same name, and one function per C function
-with mpv's name in snake case (`ucdLookup` is `ucd_lookup`). Five modules
+with mpv's name in snake case (`ucdLookup` is `ucd_lookup`). These modules
 have no C file in `misc/`:
 
 | Module | Holds |
@@ -24,6 +24,7 @@ have no C file in `misc/`:
 | `common` | The functions of `common/common.c` that `misc/` calls. |
 | `clib` | Stand-ins for the C library that Aeneas translates: `memcmp`, `strchr`, `strtoll` and others, as glibc behaves in the pinned build. |
 | `cfloat` | Stand-ins for the C library that Aeneas is told to keep opaque: `strtod`, `printf("%f")` and `printf("%" PRId64)`. Their signatures carry a `double` as its bit pattern. |
+| `cprintf` | `vsnprintf` as glibc formats in the "C" locale, for `bstr_xappend_asprintf`: a C argument list is a slice of `CArg`, and the format is interpreted as glibc does. What it does not model (`%n`, wide strings, `long double`, positional arguments) it refuses with an error. |
 | `os` | The system calls: `stat`, `getcwd`, `realpath`, `mkdir`, `open`, `rename` and the source of random bytes. Opaque to Aeneas as well. |
 
 A function in `cfloat` or `os` is a declaration without a body in the Lean

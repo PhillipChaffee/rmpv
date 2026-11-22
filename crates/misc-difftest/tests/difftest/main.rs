@@ -9,6 +9,7 @@
 mod bstr;
 mod clib;
 mod fs;
+mod printf;
 mod small;
 mod threads;
 mod tree;
