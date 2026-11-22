@@ -24,6 +24,7 @@ mod models {
     use loom::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use loom::thread;
     use rmpv_misc::dispatch::{self, DispatchKey, MpDispatchQueue};
+    use rmpv_misc::thread_pool;
     use rmpv_misc::thread_tools::{self, MpWaiter};
 
     /// Runs `f` under loom's exploration with `builder` and prints how many
@@ -209,6 +210,75 @@ mod models {
             let t = target(&q);
             dispatch::mp_dispatch_interrupt(&q);
             t.join().unwrap();
+        });
+    }
+
+    /// A pool of at most one thread whose idle timeout may fire at any point:
+    /// both items run exactly once and freeing the pool returns.
+    #[test]
+    fn thread_pool_idle_exit_vs_new_work() {
+        explore("thread_pool_idle_exit_vs_new_work", &bounded(3), || {
+            let ran = Arc::new(AtomicUsize::new(0));
+            let pool = thread_pool::mp_thread_pool_create(0, 0, 1).unwrap();
+            for _ in 0..2 {
+                let r = Arc::clone(&ran);
+                let queued = thread_pool::mp_thread_pool_queue(
+                    &pool,
+                    Box::new(move || {
+                        r.fetch_add(1, Ordering::SeqCst);
+                    }),
+                );
+                assert!(queued.is_ok());
+            }
+            drop(pool);
+            assert_eq!(ran.load(Ordering::SeqCst), 2);
+        });
+    }
+
+    /// A pool with one permanent thread: queued work runs before the pool is
+    /// freed, whatever the order of the worker's wait and the shutdown.
+    #[test]
+    fn thread_pool_shutdown_runs_work() {
+        explore("thread_pool_shutdown_runs_work", &every(), || {
+            let ran = Arc::new(AtomicUsize::new(0));
+            let pool = thread_pool::mp_thread_pool_create(1, 1, 1).unwrap();
+            let r = Arc::clone(&ran);
+            assert!(
+                thread_pool::mp_thread_pool_run(
+                    &pool,
+                    Box::new(move || {
+                        r.fetch_add(1, Ordering::SeqCst);
+                    })
+                )
+                .is_ok()
+            );
+            drop(pool);
+            assert_eq!(ran.load(Ordering::SeqCst), 1);
+        });
+    }
+
+    /// Queued work runs without the pool being freed: the worker is woken for
+    /// it.
+    #[test]
+    fn thread_pool_wakes_worker() {
+        explore("thread_pool_wakes_worker", &every(), || {
+            let done = Arc::new((loom::sync::Mutex::new(false), loom::sync::Condvar::new()));
+            let pool = thread_pool::mp_thread_pool_create(1, 1, 1).unwrap();
+            let d = Arc::clone(&done);
+            let queued = thread_pool::mp_thread_pool_queue(
+                &pool,
+                Box::new(move || {
+                    *d.0.lock().unwrap() = true;
+                    d.1.notify_all();
+                }),
+            );
+            assert!(queued.is_ok());
+            let mut finished = done.0.lock().unwrap();
+            while !*finished {
+                finished = done.1.wait(finished).unwrap();
+            }
+            drop(finished);
+            drop(pool);
         });
     }
 }

@@ -13,6 +13,7 @@ mod fs;
 mod printf;
 mod scanf;
 mod small;
+mod thread_pool;
 mod threads;
 mod tree;
 

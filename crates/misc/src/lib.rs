@@ -31,5 +31,6 @@ pub mod os;
 pub mod path_utils;
 pub mod random;
 pub mod rendezvous;
+pub mod thread_pool;
 pub mod thread_tools;
 pub mod threads;
